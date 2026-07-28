@@ -12,6 +12,32 @@ const pool = new Pool({
   connectionTimeoutMillis: 5000
 });
 
+// Helper to parse size strictly from description / personalization text
+function parseSize(descriptionText, personalizationText) {
+  const fullText = (descriptionText || '') + ' ' + (personalizationText || '');
+  const match = fullText.match(/(\d+(?:\.\d+)?\s*(?:in|inch|inches|cm|X\d+cm|x\d+cm))/i);
+  if (match) {
+    return match[1].trim();
+  }
+  return '';
+}
+
+// Helper to format date string nicely (e.g. "May 31, 2026" -> "2026-05-31")
+function formatDate(dateStr, createdAt) {
+  const source = dateStr || createdAt;
+  if (!source) return '';
+  try {
+    const d = new Date(source);
+    if (!isNaN(d.getTime())) {
+      const year = d.getFullYear();
+      const month = String(d.getMonth() + 1).padStart(2, '0');
+      const day = String(d.getDate()).padStart(2, '0');
+      return `${year}-${month}-${day}`;
+    }
+  } catch (e) {}
+  return dateStr;
+}
+
 export default async function handler(req, res) {
   // Enable CORS
   res.setHeader('Access-Control-Allow-Origin', '*');
@@ -24,17 +50,21 @@ export default async function handler(req, res) {
 
   try {
     if (req.method === 'GET') {
-      // Query REAL live orders directly from PostgreSQL order_info table joined with qc_orders, design_file, and sku_note
+      // Query REAL live orders directly from PostgreSQL order_info & product tables
       const queryRes = await pool.query(`
-        SELECT 
+        SELECT DISTINCT ON (o.id)
           o.id,
           o."orderId" as order_number,
           o."orderDate" as order_date,
+          o."createdAt" as created_at,
           o."shopName" as store_name,
           o."buyerName" as customer_name,
-          o.title as product_title,
-          o.quantity,
-          o.skus as sku,
+          COALESCE(p.name, o.title) as product_title,
+          COALESCE(p.quantity, o.quantity::integer, 1) as quantity,
+          COALESCE(p.sku, o.skus) as sku,
+          p.personalization as personalization_raw,
+          p.description as description_raw,
+          p."imgSrc" as mockup_thumb,
           q.product_group,
           q.has_uploaded_design,
           q.uploaded_design_file,
@@ -45,51 +75,59 @@ export default async function handler(req, res) {
           q.ai_status,
           q.ai_score,
           q.status,
-          q.personalization_size,
-          q.personalization_text,
           d.drive_link,
           s.text as sku_note
         FROM public.order_info o
+        LEFT JOIN public.product p ON p."orderId" = o.id
         LEFT JOIN public.qc_orders q ON q.id = ('pg-' || o.id::text)
-        LEFT JOIN public.design_file d ON d.sku = o.skus
-        LEFT JOIN public.sku_note s ON s.sku = o.skus
+        LEFT JOIN (
+          SELECT sku, MAX(drive_link) as drive_link FROM public.design_file GROUP BY sku
+        ) d ON d.sku = COALESCE(p.sku, o.skus)
+        LEFT JOIN (
+          SELECT sku, MAX(text) as text FROM public.sku_note GROUP BY sku
+        ) s ON s.sku = COALESCE(p.sku, o.skus)
         ORDER BY o.id DESC
       `);
 
-      const orders = queryRes.rows.map(row => ({
-        id: `pg-${row.id}`,
-        orderDate: row.order_date || '',
-        storeName: row.store_name || 'Etsy Shop',
-        customerName: row.customer_name || '',
-        storeIcon: 'Etsy',
-        orderNumber: row.order_number || `#${row.id}`,
-        productTitle: row.product_title || '',
-        productGroup: row.product_group || 'Stained Glass Suncatcher',
-        quantity: Number(row.quantity) || 1,
-        sku: row.sku || '',
-        personalization: {
-          size: row.personalization_size || '',
-          text: row.personalization_text || ''
-        },
-        note: '-',
-        skuNote: row.sku_note || '-',
-        driveLink: row.drive_link || '',
-        hasUploadedDesign: row.has_uploaded_design || false,
-        uploadedDesignFile: row.uploaded_design_file || null,
-        designImage: row.design_image || null,
-        designWidth: row.design_width || null,
-        designHeight: row.design_height || null,
-        designAspectRatio: row.design_width && row.design_height ? row.design_width / row.design_height : null,
-        targetSizeLabel: '',
-        targetWidth: null,
-        targetHeight: null,
-        ratioStatus: row.ratio_status || 'NEEDS_CHECK',
-        aiStatus: row.ai_status || 'NEEDS_SCAN',
-        aiScore: row.ai_score || null,
-        status: row.status || 'Chờ kiểm tra',
-        mockupThumb: '/_4123920413.png',
-        assignee: 'Dakuho (QC SP)'
-      }));
+      const orders = queryRes.rows.map(row => {
+        const parsedSize = parseSize(row.description_raw, row.personalization_raw);
+        const formattedDate = formatDate(row.order_date, row.created_at);
+
+        return {
+          id: `pg-${row.id}`,
+          orderDate: formattedDate,
+          storeName: row.store_name || 'Etsy Shop',
+          customerName: row.customer_name || '',
+          storeIcon: 'Etsy',
+          orderNumber: row.order_number || `#${row.id}`,
+          productTitle: row.product_title || '',
+          productGroup: row.product_group || 'Stained Glass Suncatcher',
+          quantity: Number(row.quantity) || 1,
+          sku: row.sku || '',
+          personalization: {
+            size: parsedSize,
+            text: row.personalization_raw || row.description_raw || ''
+          },
+          note: '-',
+          skuNote: row.sku_note || '-',
+          driveLink: row.drive_link || '',
+          hasUploadedDesign: row.has_uploaded_design || false,
+          uploadedDesignFile: row.uploaded_design_file || null,
+          designImage: row.design_image || null,
+          designWidth: row.design_width || null,
+          designHeight: row.design_height || null,
+          designAspectRatio: row.design_width && row.design_height ? row.design_width / row.design_height : null,
+          targetSizeLabel: parsedSize,
+          targetWidth: null,
+          targetHeight: null,
+          ratioStatus: row.ratio_status || 'NEEDS_CHECK',
+          aiStatus: row.ai_status || 'NEEDS_SCAN',
+          aiScore: row.ai_score || null,
+          status: row.status || 'Chờ kiểm tra',
+          mockupThumb: row.mockup_thumb || '/_4123920413.png',
+          assignee: 'Dakuho (QC SP)'
+        };
+      });
 
       return res.status(200).json({ success: true, count: orders.length, data: orders });
     }
