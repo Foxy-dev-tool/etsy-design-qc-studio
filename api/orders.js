@@ -22,20 +22,47 @@ function parseSize(descriptionText, personalizationText) {
   return '';
 }
 
-// Helper to format date string nicely (e.g. "May 31, 2026" -> "2026-05-31")
-function formatDate(dateStr, createdAt) {
-  const source = dateStr || createdAt;
-  if (!source) return '';
+// Helper to format full date & time (e.g. "May 29, 2026" + time -> "2026-05-29 01:31")
+function formatFullDateTime(dateStr, createdAt) {
   try {
-    const d = new Date(source);
-    if (!isNaN(d.getTime())) {
-      const year = d.getFullYear();
-      const month = String(d.getMonth() + 1).padStart(2, '0');
-      const day = String(d.getDate()).padStart(2, '0');
-      return `${year}-${month}-${day}`;
+    let year = 2026, month = '05', day = '29', hours = '00', mins = '00';
+
+    if (createdAt) {
+      const d = new Date(createdAt);
+      if (!isNaN(d.getTime())) {
+        year = d.getFullYear();
+        month = String(d.getMonth() + 1).padStart(2, '0');
+        day = String(d.getDate()).padStart(2, '0');
+        hours = String(d.getHours()).padStart(2, '0');
+        mins = String(d.getMinutes()).padStart(2, '0');
+      }
     }
+
+    if (dateStr) {
+      const dDate = new Date(dateStr);
+      if (!isNaN(dDate.getTime())) {
+        year = dDate.getFullYear();
+        month = String(dDate.getMonth() + 1).padStart(2, '0');
+        day = String(dDate.getDate()).padStart(2, '0');
+      }
+    }
+
+    return `${year}-${month}-${day} ${hours}:${mins}`;
   } catch (e) {}
-  return dateStr;
+  return dateStr || createdAt || '';
+}
+
+// Helper to auto-match product group based on title & SKU keywords
+function autoMatchGroup(title = '', sku = '') {
+  const text = (title + ' ' + sku).toLowerCase();
+  if (text.includes('desk mat')) return 'Desk Mat';
+  if (text.includes('graduation cap') || text.includes('cap topper')) return 'Graduation Cap';
+  if (text.includes('stole')) return 'Stole';
+  if (text.includes('2 layer') && (text.includes('square') || text.includes('4'))) return '2 layer Wooden 4';
+  if (text.includes('2 layer')) return '2 layer Wooden 2';
+  if (text.includes('1 layer') || text.includes('wooden sign') || text.includes('wood sign')) return '1 layer wooden';
+  if (text.includes('acrylic suncatcher') || text.includes('1 layer suncatcher')) return 'Arylic Suncatcher';
+  return 'Stained Glass Suncatcher';
 }
 
 export default async function handler(req, res) {
@@ -50,7 +77,7 @@ export default async function handler(req, res) {
 
   try {
     if (req.method === 'GET') {
-      // Query REAL live orders directly from PostgreSQL order_info & product tables
+      // Query ALL real live orders from PostgreSQL order_info & product tables without omitting any details
       const queryRes = await pool.query(`
         SELECT DISTINCT ON (o.id)
           o.id,
@@ -59,11 +86,14 @@ export default async function handler(req, res) {
           o."createdAt" as created_at,
           o."shopName" as store_name,
           o."buyerName" as customer_name,
+          o."buyerEmail" as customer_email,
+          o."giftMessage" as gift_message,
           COALESCE(p.name, o.title) as product_title,
           COALESCE(p.quantity, o.quantity::integer, 1) as quantity,
           COALESCE(p.sku, o.skus) as sku,
           p.personalization as personalization_raw,
           p.description as description_raw,
+          p.mockup_note as product_mockup_note,
           p."imgSrc" as mockup_thumb,
           q.product_group,
           q.has_uploaded_design,
@@ -91,24 +121,43 @@ export default async function handler(req, res) {
 
       const orders = queryRes.rows.map(row => {
         const parsedSize = parseSize(row.description_raw, row.personalization_raw);
-        const formattedDate = formatDate(row.order_date, row.created_at);
+        const fullDateTime = formatFullDateTime(row.order_date, row.created_at);
+
+        // Build comprehensive personalization text combining all non-empty customer request fields
+        const personalizationParts = [];
+        if (row.personalization_raw && row.personalization_raw.trim()) {
+          personalizationParts.push(row.personalization_raw.trim());
+        }
+        if (row.description_raw && row.description_raw.trim()) {
+          personalizationParts.push(`Options: ${row.description_raw.trim()}`);
+        }
+        if (row.gift_message && row.gift_message.trim()) {
+          personalizationParts.push(`Gift Message: ${row.gift_message.trim()}`);
+        }
+        if (row.product_mockup_note && row.product_mockup_note.trim()) {
+          personalizationParts.push(`Note: ${row.product_mockup_note.trim()}`);
+        }
+
+        const combinedPersonalizationText = personalizationParts.join('\n---\n');
+        const matchedGroup = row.product_group || autoMatchGroup(row.product_title, row.sku);
 
         return {
           id: `pg-${row.id}`,
-          orderDate: formattedDate,
+          orderDate: fullDateTime,
           storeName: row.store_name || 'Etsy Shop',
           customerName: row.customer_name || '',
+          customerEmail: row.customer_email || '',
           storeIcon: 'Etsy',
           orderNumber: row.order_number || `#${row.id}`,
           productTitle: row.product_title || '',
-          productGroup: row.product_group || 'Stained Glass Suncatcher',
+          productGroup: matchedGroup,
           quantity: Number(row.quantity) || 1,
           sku: row.sku || '',
           personalization: {
             size: parsedSize,
-            text: row.personalization_raw || row.description_raw || ''
+            text: combinedPersonalizationText || 'Yêu cầu khách không ghi'
           },
-          note: '-',
+          note: row.product_mockup_note || row.gift_message || '-',
           skuNote: row.sku_note || '-',
           driveLink: row.drive_link || '',
           hasUploadedDesign: row.has_uploaded_design || false,
