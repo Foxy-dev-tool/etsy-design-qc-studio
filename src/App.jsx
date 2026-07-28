@@ -16,6 +16,16 @@ import {
 } from './services/supabaseClient';
 import { Check, Cloud, CloudOff, Database } from 'lucide-react';
 
+// Helper to convert File to Base64 Data URL (100% reliable local image reading)
+const readFileAsDataURL = (file) => {
+  return new Promise((resolve, reject) => {
+    const reader = new FileReader();
+    reader.onload = () => resolve(reader.result);
+    reader.onerror = (err) => reject(err);
+    reader.readAsDataURL(file);
+  });
+};
+
 export default function App() {
   const [activeTab, setActiveTab] = useState('orders'); // 'orders', 'config'
   const [orders, setOrders] = useState(INITIAL_ORDERS);
@@ -56,7 +66,7 @@ export default function App() {
   // Seed Supabase Cloud DB with 12,655 CSV orders
   const handleSeedSupabase = async () => {
     if (!isSupabaseConfigured) {
-      setCsvNotifyMsg('⚠️ Chưa cấu hình Supabase URL & Anon Key trong Vercel / file .env.local!');
+      setCsvNotifyMsg('⚠️ Chưa cấu hình Supabase URL & Anon Key!');
       setTimeout(() => setCsvNotifyMsg(''), 4000);
       return;
     }
@@ -96,20 +106,12 @@ export default function App() {
     updateOrderInSupabase(orderId, { productGroup: newGroupName });
   };
 
-  // Upload design image handler: Staff uploads an artwork design file!
+  // FAIL-PROOF IMAGE UPLOAD PIPELINE: Read local file instantly & sync background cloud storage!
   const handleUploadDesign = async (targetOrder, imageFile) => {
     try {
-      let imageUrl = URL.createObjectURL(imageFile);
-
-      // Permanent cloud storage upload if Supabase is connected
-      if (isSupabaseConfigured) {
-        const cloudUrl = await uploadDesignToSupabaseStorage(imageFile);
-        if (cloudUrl) {
-          imageUrl = cloudUrl;
-        }
-      }
-
-      const dimensions = await getImageDimensions(imageUrl);
+      // 1. Read local Base64 Data URL (Guaranteed instant load, 0 CORS issues!)
+      const localDataUrl = await readFileAsDataURL(imageFile);
+      const dimensions = await getImageDimensions(localDataUrl);
 
       const group = productGroups.find(g => g.name === targetOrder.productGroup) || productGroups[0];
       const matchedTmpl = group.templates.find(
@@ -129,7 +131,7 @@ export default function App() {
       const updates = {
         hasUploadedDesign: true,
         uploadedDesignFile: imageFile.name,
-        designImage: imageUrl,
+        designImage: localDataUrl,
         designWidth: dimensions.width,
         designHeight: dimensions.height,
         designAspectRatio: dimensions.aspectRatio,
@@ -137,6 +139,7 @@ export default function App() {
         status: newStatus
       };
 
+      // 2. Update UI State INSTANTLY!
       setOrders(prev => prev.map(ord => {
         if (ord.id === targetOrder.id) {
           return {
@@ -154,11 +157,25 @@ export default function App() {
         }));
       }
 
-      // Sync order upload & status to Supabase Cloud DB
-      updateOrderInSupabase(targetOrder.id, updates);
+      setCsvNotifyMsg(`✅ Upload ảnh "${imageFile.name}" thành công! Kích thước: ${dimensions.width}×${dimensions.height}px. Trạng thái: ${newStatus}`);
+      setTimeout(() => setCsvNotifyMsg(''), 4000);
+
+      // 3. Parallel Background Cloud Upload to Supabase Storage
+      if (isSupabaseConfigured) {
+        uploadDesignToSupabaseStorage(imageFile).then(cloudUrl => {
+          if (cloudUrl) {
+            const cloudUpdates = { ...updates, designImage: cloudUrl };
+            updateOrderInSupabase(targetOrder.id, cloudUpdates);
+          } else {
+            updateOrderInSupabase(targetOrder.id, updates);
+          }
+        });
+      }
 
     } catch (err) {
-      console.error('Lỗi khi đọc file ảnh:', err);
+      console.error('Lỗi khi đọc file ảnh upload:', err);
+      setCsvNotifyMsg(`❌ Lỗi khi đọc file ảnh: ${err.message || 'File không hợp lệ'}`);
+      setTimeout(() => setCsvNotifyMsg(''), 4000);
     }
   };
 
