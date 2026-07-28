@@ -14,23 +14,42 @@ export const supabase = isSupabaseConfigured
   ? createClient(supabaseUrl, supabaseAnonKey)
   : null;
 
-// Fetch all orders from Supabase
+// Fetch ALL orders from Supabase using pagination loop (bypassing Supabase 1,000 row API limit)
 export const fetchOrdersFromSupabase = async () => {
   if (!isSupabaseConfigured || !supabase) return null;
 
   try {
-    const { data, error } = await supabase
-      .from('orders')
-      .select('*')
-      .order('created_at', { ascending: false });
+    let allData = [];
+    let page = 0;
+    const pageSize = 1000;
+    let hasMore = true;
 
-    if (error) {
-      console.warn('Supabase fetch orders error:', error);
-      return null;
+    while (hasMore) {
+      const { data, error } = await supabase
+        .from('orders')
+        .select('*')
+        .order('created_at', { ascending: false })
+        .range(page * pageSize, (page + 1) * pageSize - 1);
+
+      if (error) {
+        console.warn('Supabase fetch orders error:', error);
+        break;
+      }
+
+      if (data && data.length > 0) {
+        allData = [...allData, ...data];
+        if (data.length < pageSize) {
+          hasMore = false;
+        } else {
+          page++;
+        }
+      } else {
+        hasMore = false;
+      }
     }
 
-    if (data && data.length > 0) {
-      return data.map(row => ({
+    if (allData.length > 0) {
+      return allData.map(row => ({
         id: row.id,
         orderDate: row.order_date,
         storeName: row.store_name,
