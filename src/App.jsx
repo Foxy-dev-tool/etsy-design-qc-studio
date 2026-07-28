@@ -5,13 +5,13 @@ import VisualInspectorModal from './components/VisualInspectorModal';
 import ProductGroupConfig from './components/ProductGroupConfig';
 import AIScannerModal from './components/AIScannerModal';
 
-import { INITIAL_ORDERS, INITIAL_PRODUCT_GROUPS } from './services/mockData';
+import { INITIAL_PRODUCT_GROUPS } from './services/mockData';
 import { getImageDimensions, validateAspectRatio, runAIScanSimulated } from './services/imageAnalyzer';
 import { 
   fetchOrdersFromPostgres, 
   updateOrderInPostgres 
 } from './services/postgresClient';
-import { Check } from 'lucide-react';
+import { Check, Loader2, Database } from 'lucide-react';
 
 // Helper to convert File to Base64 Data URL
 const readFileAsDataURL = (file) => {
@@ -25,10 +25,11 @@ const readFileAsDataURL = (file) => {
 
 export default function App() {
   const [activeTab, setActiveTab] = useState('orders'); // 'orders', 'config'
-  const [orders, setOrders] = useState(INITIAL_ORDERS);
+  const [orders, setOrders] = useState([]); // Real PostgreSQL orders array
   const [productGroups, setProductGroups] = useState(INITIAL_PRODUCT_GROUPS);
   
   const [selectedOrders, setSelectedOrders] = useState([]);
+  const [isLoadingOrders, setIsLoadingOrders] = useState(true);
 
   // Active Modals state
   const [inspectorOrder, setInspectorOrder] = useState(null);
@@ -36,16 +37,22 @@ export default function App() {
   const [isScanningAI, setIsScanningAI] = useState(false);
   const [isSyncingEtsy, setIsSyncingEtsy] = useState(false);
   const [csvNotifyMsg, setCsvNotifyMsg] = useState('');
-  const [isPostgresConnected, setIsPostgresConnected] = useState(true);
+  const [isPostgresConnected, setIsPostgresConnected] = useState(false);
 
   // Load real-time orders from PostgreSQL order_info table
-  const loadLivePostgresOrders = () => {
-    fetchOrdersFromPostgres().then(dbOrders => {
-      if (dbOrders && dbOrders.length > 0) {
+  const loadLivePostgresOrders = async () => {
+    try {
+      const dbOrders = await fetchOrdersFromPostgres();
+      if (dbOrders && Array.isArray(dbOrders)) {
         setOrders(dbOrders);
         setIsPostgresConnected(true);
+        setIsLoadingOrders(false);
       }
-    });
+    } catch (err) {
+      console.error('Error loading PostgreSQL orders:', err);
+    } finally {
+      setIsLoadingOrders(false);
+    }
   };
 
   // Initial fetch & Real-time Auto Refresh polling every 10s from PostgreSQL
@@ -297,6 +304,14 @@ export default function App() {
         onRunToolScript={handleRunToolScript}
         isPostgresConnected={isPostgresConnected}
       />
+
+      {/* Loading Bar when fetching initial DB orders */}
+      {isLoadingOrders && (
+        <div className="bg-indigo-600 text-white px-4 py-2.5 text-xs font-bold flex items-center justify-center gap-2 shadow-sm animate-pulse">
+          <Loader2 className="w-4 h-4 animate-spin text-white" />
+          <span>⚡ Đang tải dữ liệu thực tế từ PostgreSQL Database (103.75.184.164:5432)...</span>
+        </div>
+      )}
 
       {/* CSV / Tools / PostgreSQL Toast Alert */}
       {csvNotifyMsg && (
