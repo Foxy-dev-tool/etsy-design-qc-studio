@@ -24,53 +24,71 @@ export default async function handler(req, res) {
 
   try {
     if (req.method === 'GET') {
-      // Fetch all orders from PostgreSQL
+      // Query REAL live orders directly from PostgreSQL order_info table joined with qc_orders, design_file, and sku_note
       const queryRes = await pool.query(`
         SELECT 
-          id, order_number, order_date, store_name, customer_name, product_title,
-          product_group, quantity, sku, personalization_size, personalization_text,
-          note, sku_note, drive_link, has_uploaded_design, uploaded_design_file,
-          design_image, design_width, design_height, design_aspect_ratio,
-          target_size_label, target_width, target_height, ratio_status,
-          ai_status, ai_score, status, mockup_thumb, assignee, ai_report
-        FROM public.qc_orders
-        ORDER BY created_at DESC
+          o.id,
+          o."orderId" as order_number,
+          o."orderDate" as order_date,
+          o."shopName" as store_name,
+          o."buyerName" as customer_name,
+          o.title as product_title,
+          o.quantity,
+          o.skus as sku,
+          q.product_group,
+          q.has_uploaded_design,
+          q.uploaded_design_file,
+          q.design_image,
+          q.design_width,
+          q.design_height,
+          q.ratio_status,
+          q.ai_status,
+          q.ai_score,
+          q.status,
+          q.personalization_size,
+          q.personalization_text,
+          d.drive_link,
+          s.text as sku_note
+        FROM public.order_info o
+        LEFT JOIN public.qc_orders q ON q.id = ('pg-' || o.id::text)
+        LEFT JOIN public.design_file d ON d.sku = o.skus
+        LEFT JOIN public.sku_note s ON s.sku = o.skus
+        ORDER BY o.id DESC
       `);
 
       const orders = queryRes.rows.map(row => ({
-        id: row.id,
-        orderDate: row.order_date,
-        storeName: row.store_name,
-        customerName: row.customer_name,
+        id: `pg-${row.id}`,
+        orderDate: row.order_date || '',
+        storeName: row.store_name || 'Etsy Shop',
+        customerName: row.customer_name || '',
         storeIcon: 'Etsy',
-        orderNumber: row.order_number,
-        productTitle: row.product_title,
-        productGroup: row.product_group,
-        quantity: row.quantity,
-        sku: row.sku,
+        orderNumber: row.order_number || `#${row.id}`,
+        productTitle: row.product_title || '',
+        productGroup: row.product_group || 'Stained Glass Suncatcher',
+        quantity: Number(row.quantity) || 1,
+        sku: row.sku || '',
         personalization: {
           size: row.personalization_size || '',
           text: row.personalization_text || ''
         },
-        note: row.note,
-        skuNote: row.sku_note,
-        driveLink: row.drive_link,
-        hasUploadedDesign: row.has_uploaded_design,
-        uploadedDesignFile: row.uploaded_design_file,
-        designImage: row.design_image,
-        designWidth: row.design_width,
-        designHeight: row.design_height,
-        designAspectRatio: row.design_aspect_ratio,
-        targetSizeLabel: row.target_size_label,
-        targetWidth: row.target_width,
-        targetHeight: row.target_height,
-        ratioStatus: row.ratio_status,
-        aiStatus: row.ai_status,
-        aiScore: row.ai_score,
-        aiReport: row.ai_report,
-        status: row.status,
-        mockupThumb: row.mockup_thumb,
-        assignee: row.assignee
+        note: '-',
+        skuNote: row.sku_note || '-',
+        driveLink: row.drive_link || '',
+        hasUploadedDesign: row.has_uploaded_design || false,
+        uploadedDesignFile: row.uploaded_design_file || null,
+        designImage: row.design_image || null,
+        designWidth: row.design_width || null,
+        designHeight: row.design_height || null,
+        designAspectRatio: row.design_width && row.design_height ? row.design_width / row.design_height : null,
+        targetSizeLabel: '',
+        targetWidth: null,
+        targetHeight: null,
+        ratioStatus: row.ratio_status || 'NEEDS_CHECK',
+        aiStatus: row.ai_status || 'NEEDS_SCAN',
+        aiScore: row.ai_score || null,
+        status: row.status || 'Chờ kiểm tra',
+        mockupThumb: '/_4123920413.png',
+        assignee: 'Dakuho (QC SP)'
       }));
 
       return res.status(200).json({ success: true, count: orders.length, data: orders });
@@ -82,53 +100,39 @@ export default async function handler(req, res) {
         return res.status(400).json({ error: 'Missing orderId' });
       }
 
-      const updates = [];
-      const values = [orderId];
-      let paramIdx = 2;
+      // Upsert order QC status and design image into qc_orders table
+      const sql = `
+        INSERT INTO public.qc_orders (
+          id, order_number, product_group, status, ratio_status, ai_status,
+          has_uploaded_design, uploaded_design_file, design_image, design_width, design_height, updated_at
+        ) VALUES (
+          $1, $1, $2, $3, $4, $5, $6, $7, $8, $9, $10, NOW()
+        )
+        ON CONFLICT (id) DO UPDATE SET
+          product_group = COALESCE(EXCLUDED.product_group, qc_orders.product_group),
+          status = COALESCE(EXCLUDED.status, qc_orders.status),
+          ratio_status = COALESCE(EXCLUDED.ratio_status, qc_orders.ratio_status),
+          ai_status = COALESCE(EXCLUDED.ai_status, qc_orders.ai_status),
+          has_uploaded_design = COALESCE(EXCLUDED.has_uploaded_design, qc_orders.has_uploaded_design),
+          uploaded_design_file = COALESCE(EXCLUDED.uploaded_design_file, qc_orders.uploaded_design_file),
+          design_image = COALESCE(EXCLUDED.design_image, qc_orders.design_image),
+          design_width = COALESCE(EXCLUDED.design_width, qc_orders.design_width),
+          design_height = COALESCE(EXCLUDED.design_height, qc_orders.design_height),
+          updated_at = NOW();
+      `;
 
-      if (fields.productGroup !== undefined) {
-        updates.push(`product_group = $${paramIdx++}`);
-        values.push(fields.productGroup);
-      }
-      if (fields.status !== undefined) {
-        updates.push(`status = $${paramIdx++}`);
-        values.push(fields.status);
-      }
-      if (fields.ratioStatus !== undefined) {
-        updates.push(`ratio_status = $${paramIdx++}`);
-        values.push(fields.ratioStatus);
-      }
-      if (fields.aiStatus !== undefined) {
-        updates.push(`ai_status = $${paramIdx++}`);
-        values.push(fields.aiStatus);
-      }
-      if (fields.hasUploadedDesign !== undefined) {
-        updates.push(`has_uploaded_design = $${paramIdx++}`);
-        values.push(fields.hasUploadedDesign);
-      }
-      if (fields.uploadedDesignFile !== undefined) {
-        updates.push(`uploaded_design_file = $${paramIdx++}`);
-        values.push(fields.uploadedDesignFile);
-      }
-      if (fields.designImage !== undefined) {
-        updates.push(`design_image = $${paramIdx++}`);
-        values.push(fields.designImage);
-      }
-      if (fields.designWidth !== undefined) {
-        updates.push(`design_width = $${paramIdx++}`);
-        values.push(fields.designWidth);
-      }
-      if (fields.designHeight !== undefined) {
-        updates.push(`design_height = $${paramIdx++}`);
-        values.push(fields.designHeight);
-      }
-
-      updates.push(`updated_at = NOW()`);
-
-      if (updates.length > 1) {
-        const sql = `UPDATE public.qc_orders SET ${updates.join(', ')} WHERE id = $1`;
-        await pool.query(sql, values);
-      }
+      await pool.query(sql, [
+        orderId,
+        fields.productGroup || 'Stained Glass Suncatcher',
+        fields.status || 'Chờ kiểm tra',
+        fields.ratioStatus || 'NEEDS_CHECK',
+        fields.aiStatus || 'NEEDS_SCAN',
+        fields.hasUploadedDesign || false,
+        fields.uploadedDesignFile || null,
+        fields.designImage || null,
+        fields.designWidth || null,
+        fields.designHeight || null
+      ]);
 
       return res.status(200).json({ success: true });
     }

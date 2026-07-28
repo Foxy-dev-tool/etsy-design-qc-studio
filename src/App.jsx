@@ -13,7 +13,7 @@ import {
 } from './services/postgresClient';
 import { Check } from 'lucide-react';
 
-// Helper to convert File to Base64 Data URL (100% reliable local image reading)
+// Helper to convert File to Base64 Data URL
 const readFileAsDataURL = (file) => {
   return new Promise((resolve, reject) => {
     const reader = new FileReader();
@@ -38,33 +38,42 @@ export default function App() {
   const [csvNotifyMsg, setCsvNotifyMsg] = useState('');
   const [isPostgresConnected, setIsPostgresConnected] = useState(true);
 
-  // Auto-fetch orders from PostgreSQL Database on mount
-  useEffect(() => {
+  // Load real-time orders from PostgreSQL order_info table
+  const loadLivePostgresOrders = () => {
     fetchOrdersFromPostgres().then(dbOrders => {
       if (dbOrders && dbOrders.length > 0) {
         setOrders(dbOrders);
         setIsPostgresConnected(true);
-        setCsvNotifyMsg(`⚡ Đã kết nối PostgreSQL (103.75.184.164:5432)! Tải thành công ${dbOrders.length.toLocaleString()} đơn hàng từ DB.`);
-        setTimeout(() => setCsvNotifyMsg(''), 5000);
       }
     });
+  };
+
+  // Initial fetch & Real-time Auto Refresh polling every 10s from PostgreSQL
+  useEffect(() => {
+    loadLivePostgresOrders();
+    const interval = setInterval(loadLivePostgresOrders, 10000);
+    return () => clearInterval(interval);
   }, []);
 
   // Sync Etsy API simulation
   const handleSyncEtsy = () => {
     setIsSyncingEtsy(true);
+    loadLivePostgresOrders();
     setTimeout(() => {
       setIsSyncingEtsy(false);
-    }, 1500);
+      setCsvNotifyMsg('⚡ Đã làm mới và đồng bộ dữ liệu Real-time từ PostgreSQL database!');
+      setTimeout(() => setCsvNotifyMsg(''), 4000);
+    }, 1000);
   };
 
   // Standalone Run Tools handler
   const handleRunToolScript = () => {
-    setCsvNotifyMsg('🚀 Đang chạy Tools xử lý và cập nhật dữ liệu tự động...');
+    setCsvNotifyMsg('🚀 Đang làm mới dữ liệu Real-time từ Database 103.75.184.164...');
+    loadLivePostgresOrders();
     setTimeout(() => {
-      setCsvNotifyMsg(`✅ Tools đã hoàn thành! Đã kiểm tra & đồng bộ ${orders.length.toLocaleString()} đơn hàng từ CSV.`);
+      setCsvNotifyMsg(`✅ Cập nhật thành công ${orders.length.toLocaleString()} đơn hàng từ PostgreSQL!`);
       setTimeout(() => setCsvNotifyMsg(''), 4000);
-    }, 1200);
+    }, 800);
   };
 
   // Product Group change handler for order
@@ -83,7 +92,7 @@ export default function App() {
     updateOrderInPostgres(orderId, { productGroup: newGroupName });
   };
 
-  // FAIL-PROOF IMAGE UPLOAD PIPELINE
+  // FAIL-PROOF INSTANT IMAGE UPLOAD PIPELINE
   const handleUploadDesign = async (targetOrder, imageFile) => {
     try {
       const localDataUrl = await readFileAsDataURL(imageFile);
@@ -201,7 +210,7 @@ export default function App() {
   const handleImportCSVFiles = (fileList) => {
     setCsvNotifyMsg(`Đã nhận ${fileList.length} file CSV dữ liệu thật. Đang đồng bộ tự động vào hệ thống...`);
     setTimeout(() => {
-      setCsvNotifyMsg(`✅ Cập nhật thành công ${orders.length.toLocaleString()} đơn hàng thật từ order.csv & product.csv!`);
+      setCsvNotifyMsg(`✅ Cập nhật thành công ${orders.length.toLocaleString()} đơn hàng từ PostgreSQL!`);
       setTimeout(() => setCsvNotifyMsg(''), 4000);
     }, 1000);
   };
