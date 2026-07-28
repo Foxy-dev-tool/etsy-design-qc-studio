@@ -7,9 +7,8 @@ import {
   Layers, 
   PackageCheck,
   Play,
-  Cloud,
-  CloudOff,
-  Database
+  Database,
+  Server
 } from 'lucide-react';
 
 export default function Header({
@@ -19,8 +18,7 @@ export default function Header({
   onSyncEtsy,
   isSyncing,
   onRunToolScript,
-  isCloudConnected,
-  onSeedSupabase
+  isPostgresConnected
 }) {
   const totalOrders = orders.length;
   const successOrders = orders.filter(o => o.status === 'Thành công' || o.status === 'Hoàn thành').length;
@@ -48,7 +46,7 @@ export default function Header({
                   </span>
                 </div>
                 <p className="text-[11px] text-slate-400 mt-0.5 font-medium">
-                  Hệ thống Quản lý & Kiểm Tra QC Tự Động • <span className="text-emerald-400 font-bold">12,655 Đơn Hàng CSV</span>
+                  Hệ thống Quản lý & Kiểm Tra QC Tự Động • <span className="text-emerald-400 font-bold">PostgreSQL 103.75.184.164</span>
                 </p>
               </div>
             </div>
@@ -69,7 +67,7 @@ export default function Header({
           <div className="hidden lg:flex items-center gap-3 text-xs">
             <div className="flex items-center gap-2 bg-slate-800/60 px-3 py-1.5 rounded-xl border border-slate-700/60">
               <div className="w-2 h-2 rounded-full bg-slate-400 animate-pulse" />
-              <span className="text-slate-400 font-medium">Tổng đơn CSV:</span>
+              <span className="text-slate-400 font-medium">Tổng đơn DB:</span>
               <strong className="text-white font-extrabold text-sm">{totalOrders.toLocaleString()}</strong>
             </div>
 
@@ -92,49 +90,27 @@ export default function Header({
             </div>
           </div>
 
-          {/* Right Action Tools & Cloud Sync Indicator */}
+          {/* Right Action Tools & PostgreSQL Connection Indicator */}
           <div className="flex items-center gap-2.5">
             
-            {/* Supabase Cloud Connection Status Badge */}
-            {isCloudConnected ? (
-              <div 
-                className="hidden sm:flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-emerald-500/20 text-emerald-300 border border-emerald-500/40 text-xs font-bold"
-                title="Đã kết nối Supabase Cloud Database! Mọi thao tác sẽ tự động lưu và đồng bộ real-time."
-              >
-                <Cloud className="w-4 h-4 text-emerald-400 animate-pulse" />
-                <span>Supabase Cloud</span>
-              </div>
-            ) : (
-              <div 
-                className="hidden sm:flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-slate-800 text-slate-300 border border-slate-700 text-xs font-bold"
-                title="Chưa kết nối Supabase Cloud. Hệ thống đang chạy chế độ Local Offline Safety."
-              >
-                <CloudOff className="w-4 h-4 text-slate-400" />
-                <span>Local Offline</span>
-              </div>
-            )}
+            {/* PostgreSQL Connection Badge */}
+            <div 
+              className="hidden sm:flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-indigo-500/20 text-indigo-300 border border-indigo-500/40 text-xs font-bold"
+              title="Đã kết nối PostgreSQL (103.75.184.164:5432 / order_sync_db_dev)!"
+            >
+              <Database className="w-4 h-4 text-indigo-400 animate-pulse" />
+              <span>PostgreSQL DB (103.75.184.164)</span>
+            </div>
 
             {/* Standalone Tools Execution Button */}
             <button
               onClick={onRunToolScript}
               className="px-3.5 py-1.5 rounded-xl bg-gradient-to-r from-orange-500 to-amber-500 hover:from-orange-600 hover:to-amber-600 text-white font-extrabold text-xs flex items-center gap-1.5 shadow-md shadow-orange-500/20 transition active:scale-95 cursor-pointer"
-              title="Bấm nút này để chạy tools xử lý dữ liệu đơn hàng tách biệt hoàn toàn với source code"
+              title="Bấm nút này để chạy tools xử lý dữ liệu đơn hàng"
             >
               <Play className="w-3.5 h-3.5 fill-current" />
               <span>🚀 Chạy Tools</span>
             </button>
-
-            {/* Seed Cloud DB Button */}
-            {isCloudConnected && (
-              <button
-                onClick={onSeedSupabase}
-                className="px-3 py-1.5 rounded-xl bg-slate-800 hover:bg-slate-700 text-slate-200 border border-slate-700 font-bold text-xs flex items-center gap-1.5 transition"
-                title="Seed toàn bộ 12,655 đơn CSV lên cơ sở dữ liệu Supabase Cloud"
-              >
-                <Database className="w-3.5 h-3.5 text-indigo-400" />
-                <span>Seed Cloud DB</span>
-              </button>
-            )}
 
             {/* Tab Navigation Controls */}
             <div className="flex items-center bg-slate-800 p-1 rounded-xl border border-slate-700">

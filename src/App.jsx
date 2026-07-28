@@ -8,13 +8,10 @@ import AIScannerModal from './components/AIScannerModal';
 import { INITIAL_ORDERS, INITIAL_PRODUCT_GROUPS } from './services/mockData';
 import { getImageDimensions, validateAspectRatio, runAIScanSimulated } from './services/imageAnalyzer';
 import { 
-  isSupabaseConfigured, 
-  fetchOrdersFromSupabase, 
-  updateOrderInSupabase, 
-  uploadDesignToSupabaseStorage,
-  seedOrdersToSupabase
-} from './services/supabaseClient';
-import { Check, Cloud, CloudOff, Database } from 'lucide-react';
+  fetchOrdersFromPostgres, 
+  updateOrderInPostgres 
+} from './services/postgresClient';
+import { Check } from 'lucide-react';
 
 // Helper to convert File to Base64 Data URL (100% reliable local image reading)
 const readFileAsDataURL = (file) => {
@@ -39,20 +36,18 @@ export default function App() {
   const [isScanningAI, setIsScanningAI] = useState(false);
   const [isSyncingEtsy, setIsSyncingEtsy] = useState(false);
   const [csvNotifyMsg, setCsvNotifyMsg] = useState('');
-  const [isCloudConnected, setIsCloudConnected] = useState(isSupabaseConfigured);
+  const [isPostgresConnected, setIsPostgresConnected] = useState(true);
 
-  // Auto-fetch orders from Supabase Cloud on mount
+  // Auto-fetch orders from PostgreSQL Database on mount
   useEffect(() => {
-    if (isSupabaseConfigured) {
-      fetchOrdersFromSupabase().then(cloudOrders => {
-        if (cloudOrders && cloudOrders.length > 0) {
-          setOrders(cloudOrders);
-          setIsCloudConnected(true);
-          setCsvNotifyMsg(`⚡ Đã kết nối Supabase Cloud! Tải thành công ${cloudOrders.length.toLocaleString()} đơn hàng từ cơ sở dữ liệu cloud.`);
-          setTimeout(() => setCsvNotifyMsg(''), 5000);
-        }
-      });
-    }
+    fetchOrdersFromPostgres().then(dbOrders => {
+      if (dbOrders && dbOrders.length > 0) {
+        setOrders(dbOrders);
+        setIsPostgresConnected(true);
+        setCsvNotifyMsg(`⚡ Đã kết nối PostgreSQL (103.75.184.164:5432)! Tải thành công ${dbOrders.length.toLocaleString()} đơn hàng từ DB.`);
+        setTimeout(() => setCsvNotifyMsg(''), 5000);
+      }
+    });
   }, []);
 
   // Sync Etsy API simulation
@@ -61,24 +56,6 @@ export default function App() {
     setTimeout(() => {
       setIsSyncingEtsy(false);
     }, 1500);
-  };
-
-  // Seed Supabase Cloud DB with 12,655 CSV orders
-  const handleSeedSupabase = async () => {
-    if (!isSupabaseConfigured) {
-      setCsvNotifyMsg('⚠️ Chưa cấu hình Supabase URL & Anon Key!');
-      setTimeout(() => setCsvNotifyMsg(''), 4000);
-      return;
-    }
-
-    setCsvNotifyMsg('⏳ Đang tải 12,655 đơn hàng CSV lên Supabase Cloud Database...');
-    const success = await seedOrdersToSupabase(orders);
-    if (success) {
-      setCsvNotifyMsg('✅ Seed Supabase Cloud thành công! Tất cả các máy nhân viên hiện có thể truy cập chung 1 dữ liệu.');
-    } else {
-      setCsvNotifyMsg('❌ Có lỗi khi seed dữ liệu lên Supabase. Vui lòng kiểm tra Bảng orders & SQL Schema.');
-    }
-    setTimeout(() => setCsvNotifyMsg(''), 5000);
   };
 
   // Standalone Run Tools handler
@@ -102,14 +79,13 @@ export default function App() {
       return ord;
     }));
 
-    // Sync to Supabase Cloud
-    updateOrderInSupabase(orderId, { productGroup: newGroupName });
+    // Sync to PostgreSQL DB
+    updateOrderInPostgres(orderId, { productGroup: newGroupName });
   };
 
-  // FAIL-PROOF IMAGE UPLOAD PIPELINE: Read local file instantly & sync background cloud storage!
+  // FAIL-PROOF IMAGE UPLOAD PIPELINE
   const handleUploadDesign = async (targetOrder, imageFile) => {
     try {
-      // 1. Read local Base64 Data URL (Guaranteed instant load, 0 CORS issues!)
       const localDataUrl = await readFileAsDataURL(imageFile);
       const dimensions = await getImageDimensions(localDataUrl);
 
@@ -139,7 +115,7 @@ export default function App() {
         status: newStatus
       };
 
-      // 2. Update UI State INSTANTLY!
+      // 1. Update UI State INSTANTLY!
       setOrders(prev => prev.map(ord => {
         if (ord.id === targetOrder.id) {
           return {
@@ -160,17 +136,8 @@ export default function App() {
       setCsvNotifyMsg(`✅ Upload ảnh "${imageFile.name}" thành công! Kích thước: ${dimensions.width}×${dimensions.height}px. Trạng thái: ${newStatus}`);
       setTimeout(() => setCsvNotifyMsg(''), 4000);
 
-      // 3. Parallel Background Cloud Upload to Supabase Storage
-      if (isSupabaseConfigured) {
-        uploadDesignToSupabaseStorage(imageFile).then(cloudUrl => {
-          if (cloudUrl) {
-            const cloudUpdates = { ...updates, designImage: cloudUrl };
-            updateOrderInSupabase(targetOrder.id, cloudUpdates);
-          } else {
-            updateOrderInSupabase(targetOrder.id, updates);
-          }
-        });
-      }
+      // 2. Sync to PostgreSQL Database
+      updateOrderInPostgres(targetOrder.id, updates);
 
     } catch (err) {
       console.error('Lỗi khi đọc file ảnh upload:', err);
@@ -219,8 +186,8 @@ export default function App() {
         return ord;
       }));
 
-      // Sync to Supabase
-      updateOrderInSupabase(targetOrder.id, updates);
+      // Sync to PostgreSQL DB
+      updateOrderInPostgres(targetOrder.id, updates);
 
       setCsvNotifyMsg(`⚡ Quét QC hoàn tất cho đơn ${targetOrder.orderNumber}! Trạng thái: ${newStatus}`);
       setTimeout(() => setCsvNotifyMsg(''), 4000);
@@ -271,8 +238,8 @@ export default function App() {
         }));
       }
 
-      // Sync to Supabase
-      updateOrderInSupabase(targetOrder.id, updates);
+      // Sync to PostgreSQL DB
+      updateOrderInPostgres(targetOrder.id, updates);
 
     } finally {
       setIsScanningAI(false);
@@ -319,11 +286,10 @@ export default function App() {
         onSyncEtsy={handleSyncEtsy}
         isSyncing={isSyncingEtsy}
         onRunToolScript={handleRunToolScript}
-        isCloudConnected={isCloudConnected}
-        onSeedSupabase={handleSeedSupabase}
+        isPostgresConnected={isPostgresConnected}
       />
 
-      {/* CSV / Tools / Supabase Toast Alert */}
+      {/* CSV / Tools / PostgreSQL Toast Alert */}
       {csvNotifyMsg && (
         <div className="max-w-[1920px] mx-auto px-4 lg:px-8 pt-2">
           <div className="p-3 bg-emerald-50 border border-emerald-200 text-emerald-800 rounded-xl text-xs font-bold flex items-center gap-2 shadow-xs">
