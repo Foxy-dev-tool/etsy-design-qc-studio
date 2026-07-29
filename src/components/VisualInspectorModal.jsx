@@ -1,70 +1,55 @@
 import React, { useState } from 'react';
 import { 
   X, 
+  CheckCircle2, 
+  AlertTriangle, 
+  Sparkles, 
   Upload, 
   ZoomIn, 
   ZoomOut, 
   RotateCcw, 
-  Sliders, 
-  CheckCircle2, 
-  AlertTriangle, 
   Layers, 
   Eye, 
-  Sparkles,
-  Image as ImageIcon
+  Maximize2,
+  Grid,
+  Check,
+  Zap,
+  Trash2
 } from 'lucide-react';
-import { validateAspectRatio } from '../services/imageAnalyzer';
+import { validateAspectRatio, getSafeImgSrc } from '../services/imageAnalyzer';
 
 export default function VisualInspectorModal({
   order,
   productGroup,
   onClose,
   onUploadDesign,
+  onDeleteDesign,
   onRunAIScan
 }) {
-  if (!order) return null;
-
-  const currentGroup = productGroup || { templates: [] };
-  const matchedTemplate = currentGroup.templates?.find(
+  const currentGroup = productGroup || { name: 'Stained Glass Suncatcher', tolerancePercent: 1.5, templates: [] };
+  
+  // Active Safe Zone template match based on size
+  const activeTemplate = currentGroup.templates?.find(
     t => t.sizeLabel.toLowerCase().replace(',', '.') === (order.personalization?.size || order.targetSizeLabel || '').toLowerCase().replace(',', '.')
-  ) || currentGroup.templates?.[0] || {
-    sizeLabel: 'Safe Zone Standard',
-    widthPx: 3012,
-    heightPx: 3012,
-    aspectRatio: 1.0,
-    templateImage: ''
-  };
+  ) || currentGroup.templates?.[0] || { sizeLabel: 'Standard', widthPx: 3012, heightPx: 3012, tmplFile: '/_4123920413.png' };
 
-  const [opacity, setOpacity] = useState(60);
+  // View state
+  const [viewMode, setViewMode] = useState('overlay'); // 'overlay', 'sideBySide'
   const [zoom, setZoom] = useState(100);
-  const [viewMode, setViewMode] = useState('overlay');
+  const [opacity, setOpacity] = useState(50);
   const [showGrid, setShowGrid] = useState(true);
 
   const hasDesign = Boolean(order.hasUploadedDesign && order.designImage);
+  const artworkSrc = order.designImage || order.mockupThumb;
+  const templateImgSrc = getSafeImgSrc(activeTemplate.tmplFile);
 
-  // Safe image URL retriever (handles spaces & URL encoding)
-  const getSafeImgSrc = (srcPath) => {
-    if (!srcPath) return '';
-    if (srcPath.startsWith('blob:') || srcPath.startsWith('data:')) return srcPath;
-    return encodeURI(srcPath);
-  };
+  // Math ratio calculations
+  const targetW = activeTemplate.widthPx || 3012;
+  const targetH = activeTemplate.heightPx || 3012;
 
-  const templateImgSrc = getSafeImgSrc(matchedTemplate.templateImage || matchedTemplate.templateFile || '');
+  const actualW = order.designWidth || 3000;
+  const actualH = order.designHeight || 3000;
 
-  // Real pixel dimensions
-  const targetW = matchedTemplate.widthPx || 3012;
-  const targetH = matchedTemplate.heightPx || 3012;
-  const actualW = order.designWidth || targetW;
-  const actualH = order.designHeight || targetH;
-
-  // Aspect Ratios
-  const templateAspectRatio = targetW / targetH;
-
-  // True physical relative scale percentages relative to baseline Safe Zone template
-  const scaleWidthPct = (actualW / targetW) * 100;
-  const scaleHeightPct = (actualH / targetH) * 100;
-
-  // Real-time aspect ratio validation comparison
   const ratioResult = validateAspectRatio(
     actualW,
     actualH,
@@ -73,108 +58,99 @@ export default function VisualInspectorModal({
     currentGroup.tolerancePercent || 1.5
   );
 
+  const templateAspectRatio = targetW / targetH;
+  const designAspectRatio = actualW / actualH;
+
   return (
-    <div className="fixed inset-0 z-50 bg-slate-950/80 backdrop-blur-md flex items-center justify-center p-3 sm:p-6 overflow-y-auto animate-in fade-in duration-200">
-      
-      {/* Modal Container */}
-      <div className="bg-white border border-slate-200 rounded-2xl w-full max-w-6xl shadow-2xl flex flex-col max-h-[92vh] overflow-hidden">
+    <div className="fixed inset-0 z-50 bg-slate-950/80 backdrop-blur-md flex items-center justify-center p-3 lg:p-6 font-sans">
+      <div className="bg-white text-slate-800 w-full max-w-7xl h-[92vh] rounded-2xl shadow-2xl flex flex-col overflow-hidden border border-slate-700">
         
-        {/* Modal Header */}
-        <div className="flex items-center justify-between px-6 py-4 border-b border-slate-100 bg-slate-50">
+        {/* Top Header Bar */}
+        <div className="bg-slate-900 text-white px-6 py-4 flex items-center justify-between border-b border-slate-800 shrink-0">
           <div className="flex items-center gap-3">
-            <div className="w-9 h-9 rounded-xl bg-orange-100 text-orange-600 flex items-center justify-center font-extrabold">
+            <div className="w-9 h-9 rounded-xl bg-orange-500/20 text-orange-400 border border-orange-500/30 flex items-center justify-center font-bold">
               <Eye className="w-5 h-5" />
             </div>
             <div>
               <div className="flex items-center gap-2">
-                <h3 className="font-extrabold text-base text-slate-900">
-                  Visual Studio Inspector • Safe Zone Matching Engine
+                <h3 className="font-extrabold text-base tracking-tight">
+                  Visual Safe Zone Inspector • Đơn {order.orderNumber}
                 </h3>
-                <span className="px-2.5 py-0.5 rounded-full bg-slate-200 text-slate-700 font-extrabold text-[11px]">
-                  {order.storeName || 'Shop #1'}
-                </span>
-                <span className="font-mono text-xs font-extrabold text-orange-600">
-                  #{order.orderNumber}
+                <span className="px-2 py-0.5 rounded bg-orange-500/20 text-orange-400 font-extrabold text-[10.5px]">
+                  {currentGroup.name}
                 </span>
               </div>
-              <p className="text-xs text-slate-500 mt-0.5">
-                Nhóm SP: <strong className="text-slate-800">{currentGroup.name}</strong> • Size Yêu Cầu: <strong className="text-orange-600">{matchedTemplate.sizeLabel} ({targetW}×{targetH}px)</strong>
+              <p className="text-xs text-slate-400 font-medium">
+                Khách hàng: <strong>{order.customerName}</strong> • SKU: <span className="font-mono text-slate-300">{order.sku}</span>
               </p>
             </div>
           </div>
 
           <button
             onClick={onClose}
-            className="p-2 rounded-xl text-slate-400 hover:text-slate-700 hover:bg-slate-200 transition"
+            className="w-8 h-8 rounded-full bg-slate-800 hover:bg-slate-700 text-slate-300 flex items-center justify-center transition cursor-pointer"
           >
             <X className="w-5 h-5" />
           </button>
         </div>
 
-        {/* Modal Body */}
-        <div className="grid grid-cols-1 lg:grid-cols-12 flex-1 overflow-hidden">
+        {/* Modal Main Body (2 Columns Layout) */}
+        <div className="flex-1 grid grid-cols-1 lg:grid-cols-12 overflow-hidden">
           
-          {/* Main Inspection Viewport Area (8 Cols) */}
-          <div className="lg:col-span-8 p-6 flex flex-col bg-slate-900 text-white space-y-4 overflow-y-auto">
+          {/* Left Canvas Viewport Area (8 Cols) */}
+          <div className="lg:col-span-8 bg-slate-900 p-6 flex flex-col justify-between space-y-4 overflow-hidden relative">
             
-            {/* Viewport Mode Toolbar & Controls */}
-            <div className="flex flex-wrap items-center justify-between gap-3 text-xs border-b border-slate-800 pb-3">
+            {/* View Mode & Zoom Controls */}
+            <div className="flex flex-wrap items-center justify-between gap-3 bg-slate-800/90 p-2.5 rounded-xl border border-slate-700/80 text-xs font-bold shrink-0">
               
-              {/* Mode Selector */}
-              <div className="flex items-center bg-slate-800 p-1 rounded-xl border border-slate-700">
+              {/* Toggle Mode */}
+              <div className="flex items-center bg-slate-900 p-1 rounded-lg border border-slate-700">
                 <button
                   onClick={() => setViewMode('overlay')}
-                  className={`px-3 py-1.5 rounded-lg font-bold flex items-center gap-1.5 transition ${
-                    viewMode === 'overlay'
-                      ? 'bg-orange-600 text-white shadow-md'
-                      : 'text-slate-400 hover:text-white'
+                  className={`px-3 py-1.5 rounded-md transition ${
+                    viewMode === 'overlay' ? 'bg-orange-500 text-white shadow-xs' : 'text-slate-400 hover:text-white'
                   }`}
                 >
-                  <Layers className="w-3.5 h-3.5" />
-                  <span>Đè Khung (Overlay)</span>
+                  Khớp Khung Chuẩn (Overlay)
                 </button>
-
                 <button
-                  onClick={() => setViewMode('split')}
-                  className={`px-3 py-1.5 rounded-lg font-bold flex items-center gap-1.5 transition ${
-                    viewMode === 'split'
-                      ? 'bg-orange-600 text-white shadow-md'
-                      : 'text-slate-400 hover:text-white'
+                  onClick={() => setViewMode('sideBySide')}
+                  className={`px-3 py-1.5 rounded-md transition ${
+                    viewMode === 'sideBySide' ? 'bg-orange-500 text-white shadow-xs' : 'text-slate-400 hover:text-white'
                   }`}
                 >
-                  <Eye className="w-3.5 h-3.5" />
-                  <span>So Sánh Song Song</span>
+                  Xem Song Song (Side-by-Side)
                 </button>
               </div>
 
-              {/* Opacity Slider (For Overlay Mode) */}
+              {/* Opacity Slider for Overlay Mode */}
               {viewMode === 'overlay' && (
-                <div className="flex items-center gap-2 bg-slate-800 px-3 py-1.5 rounded-xl border border-slate-700">
-                  <span className="text-slate-400 font-medium">Độ mờ đè khung:</span>
+                <div className="flex items-center gap-2 text-slate-300">
+                  <span className="text-[11px] font-bold">Độ trong suốt Safe Zone:</span>
                   <input
                     type="range"
                     min="10"
-                    max="100"
+                    max="90"
                     value={opacity}
                     onChange={(e) => setOpacity(Number(e.target.value))}
-                    className="w-24 accent-orange-600 cursor-pointer"
+                    className="w-24 accent-orange-500 cursor-pointer"
                   />
-                  <span className="font-mono text-amber-400 font-bold w-8">{opacity}%</span>
+                  <span className="w-8 font-mono text-[11px] text-orange-400">{opacity}%</span>
                 </div>
               )}
 
-              {/* Zoom & Grid Controls */}
-              <div className="flex items-center gap-1 bg-slate-800 p-1 rounded-xl border border-slate-700">
+              {/* Zooming Controls */}
+              <div className="flex items-center gap-1.5 bg-slate-900 p-1 rounded-lg border border-slate-700">
                 <button
-                  onClick={() => setZoom(z => Math.max(50, z - 25))}
+                  onClick={() => setZoom(prev => Math.max(prev - 25, 50))}
                   className="p-1 hover:bg-slate-700 rounded text-slate-300"
                   title="Thu nhỏ"
                 >
                   <ZoomOut className="w-3.5 h-3.5" />
                 </button>
-                <span className="font-mono text-xs px-1 text-slate-200 font-bold">{zoom}%</span>
+                <span className="px-2 font-mono text-orange-400 text-xs">{zoom}%</span>
                 <button
-                  onClick={() => setZoom(z => Math.min(300, z + 25))}
+                  onClick={() => setZoom(prev => Math.min(prev + 25, 200))}
                   className="p-1 hover:bg-slate-700 rounded text-slate-300"
                   title="Phóng to"
                 >
@@ -239,86 +215,44 @@ export default function VisualInspectorModal({
                     <div 
                       className="absolute z-0 flex items-center justify-center pointer-events-none transition-all"
                       style={{
-                        width: `${scaleWidthPct}%`,
-                        height: `${scaleHeightPct}%`,
-                        left: `${(100 - scaleWidthPct) / 2}%`,
-                        top: `${(100 - scaleHeightPct) / 2}%`
+                        width: '100%',
+                        height: '100%'
                       }}
                     >
                       <img
-                        src={order.designImage}
-                        alt="Uploaded Artwork Real Scale"
-                        className="w-full h-full object-fill rounded border border-amber-400/70 shadow-2xl bg-white/10"
+                        src={artworkSrc}
+                        alt="Uploaded Artwork Design"
+                        className="w-full h-full object-contain rounded"
                       />
                     </div>
                   )}
+
                 </div>
               ) : (
-                /* SIDE-BY-SIDE MODE */
+                /* SIDE BY SIDE MODE */
                 <div 
-                  className="grid grid-cols-2 gap-4 w-full h-full max-h-[460px] items-center justify-center"
+                  className="grid grid-cols-2 gap-6 w-full h-full items-center transition-transform duration-200"
                   style={{ transform: `scale(${zoom / 100})`, transformOrigin: 'center center' }}
                 >
-                  {/* Card 1: Uploaded Design */}
-                  <div className="flex flex-col items-center justify-center p-3 bg-slate-900 rounded-xl border border-slate-800 h-full relative">
-                    <span className="text-[10px] font-bold text-slate-300 uppercase tracking-wider mb-2 text-center">
-                      {hasDesign ? `Ảnh Thiết Kế Upload (${actualW}×${actualH}px)` : 'Ảnh Thiết Kế (Chưa Upload)'}
-                    </span>
-
-                    <div 
-                      className="relative flex items-center justify-center transition-all bg-slate-950/80 rounded p-1 border border-slate-700/80"
-                      style={{ 
-                        width: '100%',
-                        maxWidth: templateAspectRatio >= 1 ? '270px' : `${270 * templateAspectRatio}px`,
-                        aspectRatio: `${templateAspectRatio}`
-                      }}
-                    >
-                      {hasDesign ? (
-                        <div 
-                          className="flex items-center justify-center transition-all"
-                          style={{
-                            width: `${Math.min(100, scaleWidthPct)}%`,
-                            height: `${Math.min(100, scaleHeightPct)}%`
-                          }}
-                        >
-                          <img
-                            src={order.designImage}
-                            alt="Uploaded Artwork"
-                            className="w-full h-full object-contain rounded shadow-lg border border-amber-400/60"
-                          />
-                        </div>
+                  {/* Left: Uploaded Design */}
+                  <div className="flex flex-col items-center justify-center p-3 bg-slate-900/80 rounded-xl border border-slate-800">
+                    <span className="text-xs font-bold text-slate-400 mb-2">1. File Ảnh Thiết Kế Upload ({actualW}×{actualH} px)</span>
+                    <div className="w-full max-h-[320px] aspect-square flex items-center justify-center bg-slate-950 rounded border border-slate-800 overflow-hidden">
+                      {artworkSrc ? (
+                        <img src={artworkSrc} alt="Uploaded Design" className="w-full h-full object-contain rounded" />
                       ) : (
-                        <div className="w-full h-full min-h-[180px] bg-slate-950 border border-slate-800 rounded flex flex-col items-center justify-center text-slate-600 gap-1.5">
-                          <ImageIcon className="w-8 h-8 opacity-40" />
-                          <span className="text-xs font-bold text-slate-500">CHỜ UP ẢNH THIẾT KẾ</span>
-                        </div>
+                        <span className="text-xs text-slate-500 font-bold">(Chưa up file ảnh)</span>
                       )}
                     </div>
-
-                    {hasDesign && (
-                      <span className={`mt-2 text-[10px] font-extrabold px-2 py-0.5 rounded border ${
-                        scaleWidthPct === 100 && scaleHeightPct === 100
-                          ? 'bg-emerald-500/20 text-emerald-400 border-emerald-500/40'
-                          : 'bg-amber-500/20 text-amber-300 border-amber-500/40'
-                      }`}>
-                        Tỷ lệ hiển thị thực tế: {scaleWidthPct.toFixed(1)}% Rộng × {scaleHeightPct.toFixed(1)}% Cao
-                      </span>
-                    )}
+                    <span className="mt-2 text-[10px] font-mono text-slate-400">
+                      Tỷ lệ thực: <strong>{designAspectRatio.toFixed(2)}</strong>
+                    </span>
                   </div>
 
-                  {/* Card 2: Safe Zone Cut-line Template */}
-                  <div className="flex flex-col items-center justify-center p-3 bg-slate-900 rounded-xl border border-slate-800 h-full">
-                    <span className="text-[10px] font-bold text-orange-400 uppercase tracking-wider mb-2 text-center">
-                      Khung Safe Zone Template Chuẩn 100% ({targetW}×{targetH}px)
-                    </span>
-                    <div 
-                      className="relative flex items-center justify-center transition-all bg-slate-950/80 rounded p-1 border border-orange-500/40 shadow-lg shadow-orange-500/10"
-                      style={{ 
-                        width: '100%',
-                        maxWidth: templateAspectRatio >= 1 ? '270px' : `${270 * templateAspectRatio}px`,
-                        aspectRatio: `${templateAspectRatio}`
-                      }}
-                    >
+                  {/* Right: Safe Zone Baseline Template */}
+                  <div className="flex flex-col items-center justify-center p-3 bg-slate-900/80 rounded-xl border border-slate-800">
+                    <span className="text-xs font-bold text-slate-400 mb-2">2. Khung Safe Zone Mẫu ({targetW}×{targetH} px)</span>
+                    <div className="w-full max-h-[320px] aspect-square flex items-center justify-center bg-slate-950 rounded border border-slate-800 overflow-hidden">
                       {templateImgSrc ? (
                         <img
                           src={templateImgSrc}
@@ -390,10 +324,10 @@ export default function VisualInspectorModal({
                 </div>
               </div>
 
-              {/* Dimension Specs Comparison Card */}
+              {/* Technical Specifications Summary */}
               <div className="bg-white p-4 rounded-xl border border-slate-200 shadow-xs space-y-3">
                 <span className="text-[10px] font-extrabold text-slate-400 uppercase tracking-wider block">
-                  Thông Số Kích Thước Pixel So Sánh
+                  Thông Số Tỷ Lệ & Pixel
                 </span>
 
                 <div className="space-y-2 text-xs">
@@ -420,10 +354,10 @@ export default function VisualInspectorModal({
                 </div>
               </div>
 
-              {/* Upload Artwork Section */}
+              {/* Upload & Delete Artwork Section */}
               <div className="bg-white p-4 rounded-xl border border-slate-200 shadow-xs space-y-3">
                 <span className="text-[10px] font-extrabold text-slate-400 uppercase tracking-wider block">
-                  Tải Lên File Thiết Kế Mới
+                  Quản Lý File Ảnh Thiết Kế
                 </span>
 
                 <label className="w-full py-3 px-4 rounded-xl bg-orange-600 hover:bg-orange-700 text-white font-bold text-xs flex items-center justify-center gap-2 cursor-pointer transition shadow-sm active:scale-95">
@@ -440,6 +374,21 @@ export default function VisualInspectorModal({
                     }}
                   />
                 </label>
+
+                {/* XÓA ẢNH THIẾT KẾ BUTTON IN MODAL */}
+                {hasDesign && (
+                  <button
+                    onClick={() => {
+                      if (onDeleteDesign) {
+                        onDeleteDesign(order);
+                      }
+                    }}
+                    className="w-full py-2.5 px-4 rounded-xl bg-rose-50 hover:bg-rose-100 text-rose-700 border border-rose-200 font-bold text-xs flex items-center justify-center gap-2 transition active:scale-95 cursor-pointer"
+                  >
+                    <Trash2 className="w-4 h-4 text-rose-600" />
+                    <span>Xóa Ảnh Thiết Kế Đã Tải</span>
+                  </button>
+                )}
               </div>
 
             </div>

@@ -162,6 +162,44 @@ export default function App() {
     }
   };
 
+  // DELETE UPLOADED DESIGN IMAGE PIPELINE
+  const handleDeleteDesign = (targetOrder) => {
+    const updates = {
+      hasUploadedDesign: false,
+      uploadedDesignFile: null,
+      designImage: null,
+      designWidth: null,
+      designHeight: null,
+      designAspectRatio: null,
+      ratioStatus: 'NEEDS_CHECK',
+      status: 'Chờ kiểm tra'
+    };
+
+    // 1. Update UI State INSTANTLY!
+    setOrders(prev => prev.map(ord => {
+      if (ord.id === targetOrder.id) {
+        return {
+          ...ord,
+          ...updates
+        };
+      }
+      return ord;
+    }));
+
+    if (inspectorOrder && inspectorOrder.id === targetOrder.id) {
+      setInspectorOrder(prev => ({
+        ...prev,
+        ...updates
+      }));
+    }
+
+    setCsvNotifyMsg(`🗑️ Đã xóa ảnh thiết kế của đơn ${targetOrder.orderNumber}! Trạng thái được chuyển về "Chờ kiểm tra".`);
+    setTimeout(() => setCsvNotifyMsg(''), 4000);
+
+    // 2. Sync to PostgreSQL Database
+    updateOrderInPostgres(targetOrder.id, updates);
+  };
+
   // Manual QC Scan button click handler for row
   const handleRunQCScan = async (targetOrder, groupObj, matchedTmpl) => {
     if (!targetOrder.designImage && !targetOrder.mockupThumb) {
@@ -334,6 +372,7 @@ export default function App() {
             onOpenVisualInspector={(ord) => setInspectorOrder(ord)}
             onOpenAIScanner={(ord) => setAiScannerOrder(ord)}
             onUploadDesign={handleUploadDesign}
+            onDeleteDesign={handleDeleteDesign}
             onRunQCScan={handleRunQCScan}
             onGroupChange={handleGroupChange}
             selectedOrders={selectedOrders}
@@ -361,6 +400,7 @@ export default function App() {
           productGroup={productGroups.find(g => g.name === inspectorOrder.productGroup) || productGroups[0]}
           onClose={() => setInspectorOrder(null)}
           onUploadDesign={handleUploadDesign}
+          onDeleteDesign={handleDeleteDesign}
           onRunAIScan={(ord) => {
             setInspectorOrder(null);
             setAiScannerOrder(ord);
