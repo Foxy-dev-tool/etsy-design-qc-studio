@@ -343,7 +343,6 @@ export default function OrderListTable({
                   const isSelected = selectedOrders.includes(order.id);
                   const rawText = order.personalization?.text || '';
                   const detectedSize = extractOrderSize(order);
-                  const cleanText = cleanPersonalizationText(rawText);
                   const cleanNote = formatNoteDisplay(order.note);
 
                   // Fail-proof group & template retrieval
@@ -439,9 +438,9 @@ export default function OrderListTable({
                                   </div>
                                 )}
 
-                                {cleanText && (
+                                {rawText && (
                                   <button
-                                    onClick={() => copyToClipboard(cleanText, `pers-${order.id}`)}
+                                    onClick={() => copyToClipboard(rawText, `pers-${order.id}`)}
                                     className="px-3 py-1 rounded-xl bg-slate-50 hover:bg-slate-100 text-slate-700 border border-slate-300 font-bold text-xs flex items-center gap-1.5 cursor-pointer transition active:scale-95 shadow-2xs"
                                     title="Sao chép toàn bộ Yêu cầu khách"
                                   >
@@ -460,10 +459,10 @@ export default function OrderListTable({
                                 )}
                               </div>
 
-                              {/* Cleaned Customer Personalization Text Box (Without redundant size lines) */}
-                              {cleanText && (
+                              {/* Customer Personalization Text Box (100% RAW FROM DATABASE) */}
+                              {rawText && (
                                 <div className="p-3 rounded-xl bg-blue-50/80 border border-blue-200/80 text-slate-900 font-sans text-xs font-semibold whitespace-pre-wrap leading-relaxed shadow-2xs break-words tracking-normal">
-                                  {cleanText}
+                                  {rawText}
                                 </div>
                               )}
 
