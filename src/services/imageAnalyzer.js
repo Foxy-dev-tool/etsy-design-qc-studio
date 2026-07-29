@@ -86,21 +86,22 @@ export const validateAspectRatio = (actualWidth, actualHeight, targetWidth, targ
 // Months pattern to strip from person name lines (e.g. "Emilia - April" -> "Emilia")
 const MONTHS_PATTERN = /\b(?:january|february|march|april|may|june|july|august|september|october|november|december|jan|feb|mar|apr|jun|jul|aug|sep|oct|nov|dec)\b/gi;
 
-// System metadata labels to strip (e.g. Size:, Style:, Options:)
+// System metadata lines to strip (e.g. Size: 7.87 INCHES, Style: Heart)
 const METADATA_LINES_PATTERN = /^(?:Size|Style|Option|Options|Background|Kích thước|Mẫu|Căn lề|Layer|Color|Font|Note|Customer Note|Product Note|Dimensions|Select Size)\s*[:=].*$/gmi;
+
+// Field label prefixes to strip (e.g. "Teacher Name:", "Child Name:", "Dog Name:", "Custom Text:")
+const FIELD_LABEL_PREFIXES = /^(?:Teacher(?:\'s)?\s*Name|Teacher|Child(?:\'s)?\s*Name|Kid(?:\'s)?\s*Name|Student(?:\'s)?\s*Name|Mom(?:\'s)?\s*Name|Dad(?:\'s)?\s*Name|Grandma(?:\'s)?\s*Name|Grandpa(?:\'s)?\s*Name|Pet(?:\'s)?\s*Name|Dog(?:\'s)?\s*Name|Cat(?:\'s)?\s*Name|Custom\s*Name|Personalized\s*Name|Text\s*on\s*\w+|Main\s*Text|Top\s*Text|Bottom\s*Text|Custom\s*Text|Customer\s*Text|Personalization|Personalized\s*Text|Name|Names|Title|Headline)\s*[:=\-]?\s*/gi;
 
 /**
  * Smart Classifier: Extracts ONLY printed names & titles from raw customer text,
- * stripping out metadata (Size, Style, Options) and birth months (April, February, January...)
+ * stripping out metadata (Size, Style, Options), field label prefixes (Teacher Name:, Child Name:),
+ * and birth months (April, February, January...)
  */
 export const extractNamesAndTitleFromPersonalization = (rawText) => {
   if (!rawText || !rawText.trim()) return [];
 
   // 1. Remove metadata lines like Size: 7.87 INCHES, Style: Heart
   let cleanedText = rawText.replace(METADATA_LINES_PATTERN, '');
-
-  // 2. Remove inline header words like "Personalization:"
-  cleanedText = cleanedText.replace(/(?:Personalization|Personalized\s*Text|Customer\s*Text|Custom\s*Text)\s*[:=]?/gi, '');
 
   const lines = cleanedText.split('\n');
   const extractedNames = [];
@@ -114,6 +115,10 @@ export const extractNamesAndTitleFromPersonalization = (rawText) => {
 
     // Remove line number prefixes e.g. "1-", "2-", "1.", "2.", "Line 1:"
     trimmed = trimmed.replace(/^(?:line\s*\d+|[\d]+[\.\-\)\:]\s*)/i, '').trim();
+    if (!trimmed) continue;
+
+    // Remove field label prefixes e.g. "Teacher Name: Miss Salazar" -> "Miss Salazar", "Dog Name - Max" -> "Max"
+    trimmed = trimmed.replace(FIELD_LABEL_PREFIXES, '').trim();
     if (!trimmed) continue;
 
     // Remove month tags e.g. "Emilia - April" -> "Emilia", "Kylie- February" -> "Kylie"
@@ -130,8 +135,30 @@ export const extractNamesAndTitleFromPersonalization = (rawText) => {
   return extractedNames;
 };
 
+function levenshteinDistance(a, b) {
+  if (a === b) return 0;
+  if (!a.length) return b.length;
+  if (!b.length) return a.length;
+  const matrix = [];
+  for (let i = 0; i <= b.length; i++) matrix[i] = [i];
+  for (let j = 0; j <= a.length; j++) matrix[0][j] = j;
+  for (let i = 1; i <= b.length; i++) {
+    for (let j = 1; j <= a.length; j++) {
+      if (b.charAt(i - 1) === a.charAt(j - 1)) {
+        matrix[i][j] = matrix[i - 1][j - 1];
+      } else {
+        matrix[i][j] = Math.min(
+          matrix[i - 1][j - 1] + 1,
+          Math.min(matrix[i][j - 1] + 1, matrix[i - 1][j] + 1)
+        );
+      }
+    }
+  }
+  return matrix[b.length][a.length];
+}
+
 /**
- * Strict Name & Keyword Matching Engine
+ * Strict Name & Keyword Matching Engine with Fuzzy Levenshtein Distance
  */
 export const compareTexts = (targetText, scannedText) => {
   if (!targetText || !scannedText) return { match: false, score: 0, missingNames: [], targetNames: [] };
@@ -139,14 +166,25 @@ export const compareTexts = (targetText, scannedText) => {
   const targetNames = extractNamesAndTitleFromPersonalization(targetText);
   if (targetNames.length === 0) return { match: true, score: 100, missingNames: [], targetNames: [] };
 
-  const cleanScanned = scannedText.toLowerCase().replace(/[^a-z0-9\s]/g, ' ');
+  const cleanScannedWords = scannedText.toLowerCase().replace(/[^a-z0-9\s]/g, ' ').split(/\s+/).filter(Boolean);
 
   const foundNames = [];
   const missingNames = [];
 
   for (const name of targetNames) {
     const nameWords = name.toLowerCase().split(/\s+/).filter(w => w.length > 1);
-    const allWordsFound = nameWords.every(w => cleanScanned.includes(w));
+    
+    // Check if each word of the target name exists or has close fuzzy match in OCR scanned text
+    const allWordsFound = nameWords.every(word => {
+      return cleanScannedWords.some(scannedWord => {
+        if (scannedWord.includes(word) || word.includes(scannedWord)) return true;
+        if (word.length >= 4 && scannedWord.length >= 4) {
+          return levenshteinDistance(word, scannedWord) <= 2;
+        }
+        return false;
+      });
+    });
+
     if (allWordsFound) {
       foundNames.push(name);
     } else {
