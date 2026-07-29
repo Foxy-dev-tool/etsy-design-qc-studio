@@ -64,13 +64,20 @@ export default async function handler(req, res) {
 
   try {
     if (req.method === 'GET') {
-      // Query ALL 11,553 real live orders from public."order" master table
-      const queryRes = await pool.query(`
+      const limitParam = req.query?.limit;
+      let limitClause = 'LIMIT 2500'; // Default to 2,500 most recent orders for ultra-fast load speed
+      if (limitParam === 'all') {
+        limitClause = ''; // Return all orders if requested
+      } else if (limitParam && !isNaN(parseInt(limitParam))) {
+        limitClause = `LIMIT ${parseInt(limitParam)}`;
+      }
+
+      // Query real live orders from public."order" master table with optimized fields
+      const sql = `
         SELECT DISTINCT ON (o.id)
           o.id,
           o."orderCode" as order_number,
           o."createdAt" as created_at,
-          o."updatedAt" as updated_at,
           o."customerName" as customer_name,
           o."customerNote" as customer_note,
           o.note as order_note,
@@ -103,19 +110,19 @@ export default async function handler(req, res) {
           SELECT sku, MAX(text) as text FROM public.sku_note GROUP BY sku
         ) s ON s.sku = p.sku
         ORDER BY o.id DESC
-      `);
+        ${limitClause}
+      `;
+
+      const queryRes = await pool.query(sql);
 
       const orders = queryRes.rows.map(row => {
         const parsedSize = parseSize(row.description_raw, row.personalization_raw);
         const fullDateTime = formatFullDateTime(row.created_at);
 
-        // Build comprehensive personalization text combining all non-empty customer request fields
+        // Build concise personalization text
         const personalizationParts = [];
         if (row.personalization_raw && row.personalization_raw.trim()) {
           personalizationParts.push(row.personalization_raw.trim());
-        }
-        if (row.description_raw && row.description_raw.trim()) {
-          personalizationParts.push(`Options: ${row.description_raw.trim()}`);
         }
         if (row.customer_note && row.customer_note.trim()) {
           personalizationParts.push(`Customer Note: ${row.customer_note.trim()}`);

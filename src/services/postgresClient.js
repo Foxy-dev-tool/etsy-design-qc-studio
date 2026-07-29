@@ -2,22 +2,25 @@
 
 export const isPostgresConfigured = true;
 
-const VERCEL_API_URL = 'https://etsy-design-qc-studio.vercel.app/api/orders';
+const VERCEL_API_URL = 'https://etsy-design-qc-studio-tawny.vercel.app/api/orders';
 
-// Fetch all orders from PostgreSQL DB via /api/orders (with fallback to production Vercel URL for local dev)
-export const fetchOrdersFromPostgres = async () => {
+// Fetch all orders from PostgreSQL DB via /api/orders
+export const fetchOrdersFromPostgres = async (limit = 2500) => {
   let response = null;
+  const endpoint = `/api/orders?limit=${limit}`;
+  const fallbackEndpoint = `${VERCEL_API_URL}?limit=${limit}`;
+
   try {
     // 1. Try relative endpoint /api/orders first
-    response = await fetch('/api/orders');
+    response = await fetch(endpoint);
     if (!response.ok) {
-      // 2. If relative failed (e.g. running on Vite local dev without backend), fallback to Vercel API
-      response = await fetch(VERCEL_API_URL);
+      // 2. If relative failed, fallback to Vercel production API endpoint
+      response = await fetch(fallbackEndpoint);
     }
   } catch (err) {
     try {
       // 3. Network fallback to Vercel production API endpoint
-      response = await fetch(VERCEL_API_URL);
+      response = await fetch(fallbackEndpoint);
     } catch (e) {
       console.warn('Lỗi kết nối API PostgreSQL:', e);
       return null;
@@ -64,7 +67,7 @@ export const updateOrderInPostgres = async (orderId, fields) => {
       });
       return response.ok;
     } catch (e) {
-      console.warn('Lỗi lưu order vào PostgreSQL:', e);
+      console.warn('Lỗi cập nhật PostgreSQL DB:', e);
       return false;
     }
   }
