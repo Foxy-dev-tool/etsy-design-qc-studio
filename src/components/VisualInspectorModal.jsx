@@ -25,15 +25,43 @@ export default function VisualInspectorModal({
   if (!order) return null;
 
   const currentGroup = productGroup || { templates: [] };
-  const matchedTemplate = currentGroup.templates?.find(
-    t => t.sizeLabel.toLowerCase().replace(',', '.') === (order.personalization?.size || order.targetSizeLabel || '').toLowerCase().replace(',', '.')
-  ) || currentGroup.templates?.[0] || {
-    sizeLabel: 'Safe Zone Standard',
-    widthPx: 3012,
-    heightPx: 3012,
-    aspectRatio: 1.0,
-    templateImage: ''
-  };
+  
+  // Safe Zone template matcher (by size label or closest aspect ratio)
+  const matchedTemplate = (() => {
+    if (!currentGroup.templates || currentGroup.templates.length === 0) {
+      return {
+        sizeLabel: 'Safe Zone Standard',
+        widthPx: 3012,
+        heightPx: 3012,
+        aspectRatio: 1.0,
+        templateImage: currentGroup.baseMockup || '/_4123920413.png'
+      };
+    }
+    const orderSize = (order.personalization?.size || order.targetSizeLabel || '').toLowerCase().replace(',', '.');
+    if (orderSize) {
+      const match = currentGroup.templates.find(
+        t => t.sizeLabel && t.sizeLabel.toLowerCase().replace(',', '.').includes(orderSize)
+      );
+      if (match) return match;
+    }
+    if (order.designWidth > 0 && order.designHeight > 0) {
+      const actualRatio = order.designWidth / order.designHeight;
+      let best = currentGroup.templates[0];
+      let minDiff = Infinity;
+      for (const tmpl of currentGroup.templates) {
+        const tmplRatio = (tmpl.widthPx || 1) / (tmpl.heightPx || 1);
+        const diff = Math.abs(actualRatio - tmplRatio);
+        if (diff < minDiff) {
+          minDiff = diff;
+          best = tmpl;
+        }
+      }
+      return best;
+    }
+    return currentGroup.templates[0];
+  })();
+
+  const templateImgSrc = matchedTemplate.templateImage || matchedTemplate.tmplFile || currentGroup.baseMockup || '/_4123920413.png';
 
   const [opacity, setOpacity] = useState(60);
   const [zoom, setZoom] = useState(100);
@@ -62,40 +90,40 @@ export default function VisualInspectorModal({
   );
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/70 backdrop-blur-md p-2 sm:p-4 overflow-y-auto">
+    <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/70 backdrop-blur-md p-2 sm:p-4 overflow-y-auto font-sans">
       <div className="relative w-full max-w-6xl bg-white border border-slate-200 rounded-2xl shadow-2xl overflow-hidden flex flex-col max-h-[95vh]">
         
         {/* Modal Top Header */}
-        <div className="flex items-center justify-between px-5 py-3.5 bg-slate-900 text-white">
+        <div className="flex items-center justify-between px-5 py-3.5 bg-slate-900 text-white shrink-0">
           <div className="flex items-center gap-3">
             <div className="w-9 h-9 rounded-xl bg-orange-500 text-white flex items-center justify-center font-bold shadow-md">
               <Eye className="w-5 h-5" />
             </div>
             <div>
               <div className="flex items-center gap-2">
-                <h3 className="font-extrabold text-base text-white">
-                  Khung Hình Sản Phẩm & Test Khớp Thiết Kế (Preview Studio)
+                <h3 className="font-extrabold text-base tracking-tight">
+                  Visual Safe Zone Inspector • Đơn {order.orderNumber}
                 </h3>
-                <span className="px-2 py-0.5 rounded-full bg-orange-500/20 text-orange-400 text-[10px] font-bold border border-orange-500/30">
-                  Đơn {order.orderNumber}
+                <span className="px-2 py-0.5 rounded bg-orange-500/20 text-orange-400 font-extrabold text-[10.5px]">
+                  {currentGroup.name} ({matchedTemplate.sizeLabel})
                 </span>
               </div>
-              <p className="text-xs text-slate-300">
-                Sản phẩm: {order.productTitle?.slice(0, 50)}... | Safe Zone: <strong className="text-amber-400">{matchedTemplate.sizeLabel}</strong> ({targetW}×{targetH} px)
+              <p className="text-xs text-slate-400 font-medium">
+                Khách hàng: <strong>{order.customerName}</strong> • SKU: <span className="font-mono text-slate-300">{order.sku}</span>
               </p>
             </div>
           </div>
 
-          <div className="flex items-center gap-2.5">
-            <label className="px-3.5 py-1.5 rounded-xl bg-orange-600 hover:bg-orange-500 text-white text-xs font-bold flex items-center gap-1.5 transition cursor-pointer shadow-md">
-              <Upload className="w-3.5 h-3.5" />
-              <span>{hasDesign ? 'Up Ảnh Thiết Kế Khác' : 'Up Ảnh Thiết Kế Mới'}</span>
+          <div className="flex items-center gap-3">
+            <label className="px-3 py-1.5 rounded-xl bg-orange-500 hover:bg-orange-600 text-white font-extrabold text-xs flex items-center gap-1.5 cursor-pointer shadow-sm transition active:scale-95">
+              <Upload className="w-4 h-4" />
+              <span>Up Ảnh Thiết Kế Mới</span>
               <input
                 type="file"
                 accept="image/*"
                 className="hidden"
                 onChange={(e) => {
-                  if (e.target.files && e.target.files[0]) {
+                  if (e.target.files && e.target.files[0] && onUploadDesign) {
                     onUploadDesign(order, e.target.files[0]);
                   }
                 }}
@@ -104,7 +132,7 @@ export default function VisualInspectorModal({
 
             <button
               onClick={onClose}
-              className="w-8 h-8 rounded-xl bg-slate-800 hover:bg-slate-700 text-slate-300 hover:text-white flex items-center justify-center transition"
+              className="w-8 h-8 rounded-xl bg-slate-800 hover:bg-slate-700 text-slate-300 hover:text-white flex items-center justify-center transition cursor-pointer"
             >
               <X className="w-5 h-5" />
             </button>
@@ -113,7 +141,7 @@ export default function VisualInspectorModal({
 
         {/* SYSTEM STATUS BANNER */}
         {!hasDesign ? (
-          <div className="bg-amber-500 text-slate-950 px-5 py-2.5 flex items-center justify-between shadow-md">
+          <div className="bg-amber-500 text-slate-950 px-5 py-2.5 flex items-center justify-between shadow-md shrink-0">
             <div className="flex items-center gap-2.5 text-xs font-bold">
               <ImageIcon className="w-5 h-5 shrink-0 text-slate-950" />
               <span>
@@ -125,7 +153,7 @@ export default function VisualInspectorModal({
             </span>
           </div>
         ) : !ratioResult.isValid ? (
-          <div className="bg-rose-600 text-white px-5 py-3 flex items-center justify-between shadow-md">
+          <div className="bg-rose-600 text-white px-5 py-3 flex items-center justify-between shadow-md shrink-0">
             <div className="flex items-center gap-3">
               <AlertTriangle className="w-6 h-6 text-white shrink-0 animate-bounce" />
               <div>
@@ -142,7 +170,7 @@ export default function VisualInspectorModal({
             </span>
           </div>
         ) : (
-          <div className="bg-emerald-600 text-white px-5 py-2.5 flex items-center justify-between shadow-md">
+          <div className="bg-emerald-600 text-white px-5 py-2.5 flex items-center justify-between shadow-md shrink-0">
             <div className="flex items-center gap-3">
               <CheckCircle2 className="w-5 h-5 text-white shrink-0" />
               <div>
@@ -167,7 +195,7 @@ export default function VisualInspectorModal({
           <div className="lg:col-span-8 bg-slate-100 p-3.5 flex flex-col relative overflow-hidden border-r border-slate-200">
             
             {/* Toolbar */}
-            <div className="flex flex-wrap items-center justify-between gap-2 pb-2.5 mb-2.5 border-b border-slate-200 text-xs">
+            <div className="flex flex-wrap items-center justify-between gap-2 pb-2.5 mb-2.5 border-b border-slate-200 text-xs shrink-0">
               
               <div className="flex items-center gap-1 bg-white p-1 rounded-xl border border-slate-200 shadow-2xs">
                 <button
@@ -231,38 +259,44 @@ export default function VisualInspectorModal({
 
             </div>
 
-            {/* Interactive Viewport Box */}
-            <div className="flex-1 min-h-[380px] max-h-[520px] bg-slate-950 rounded-xl border border-slate-300 flex items-center justify-center p-4 overflow-auto relative shadow-inner">
+            {/* Interactive Viewport Box - Fit 100% of frame without scrollbars */}
+            <div className="flex-1 w-full h-full min-h-[380px] bg-slate-950 rounded-xl border border-slate-300 flex items-center justify-center p-3 relative shadow-inner overflow-hidden">
               
               {showGrid && (
                 <div 
                   className="absolute inset-0 opacity-15 pointer-events-none"
                   style={{
-                    backgroundImage: 'radial-gradient(#ffffff 1px, transparent 1px)',
+                    backgroundImage: `radial-gradient(circle, #ffffff 1px, transparent 1px)`,
                     backgroundSize: '20px 20px'
                   }}
                 />
               )}
 
-              {/* OVERLAY MODE: 100% REAL PHYSICAL PROPORTIONAL SCALE */}
+              {/* OVERLAY MODE: 100% COMPLETE FRAME FIT ON 1 CANVAS WITHOUT SCROLLBARS */}
               {viewMode === 'overlay' ? (
                 <div 
-                  className="relative transition-transform duration-200 ease-out shadow-2xl rounded flex items-center justify-center"
+                  className="relative transition-transform duration-200 ease-out shadow-2xl rounded flex items-center justify-center max-w-full max-h-full"
                   style={{ 
                     transform: `scale(${zoom / 100})`, 
                     transformOrigin: 'center center',
-                    width: '100%',
-                    maxWidth: templateAspectRatio >= 1 ? '560px' : `${560 * templateAspectRatio}px`,
+                    width: templateAspectRatio >= 1 ? '100%' : 'auto',
+                    height: templateAspectRatio <= 1 ? '100%' : 'auto',
+                    maxHeight: '440px',
+                    maxWidth: '100%',
                     aspectRatio: `${templateAspectRatio}`
                   }}
                 >
-                  {/* Baseline Safe Zone Template Frame (Defines 100% Canvas Boundary) */}
-                  {matchedTemplate.templateImage ? (
+                  {/* Baseline Safe Zone Template Frame */}
+                  {templateImgSrc ? (
                     <img
-                      src={matchedTemplate.templateImage}
+                      src={templateImgSrc}
                       alt="Template Safe Zone Baseline"
                       className="w-full h-full object-contain rounded border border-slate-700 bg-slate-900/90 shadow-2xl relative z-10 transition-opacity"
                       style={{ opacity: opacity / 100 }}
+                      onError={(e) => {
+                        e.target.onerror = null;
+                        e.target.src = '/_4123920413.png';
+                      }}
                     />
                   ) : (
                     <div className="w-full h-full bg-slate-900 border border-slate-700 rounded flex items-center justify-center">
@@ -270,7 +304,7 @@ export default function VisualInspectorModal({
                     </div>
                   )}
 
-                  {/* Uploaded Artwork Layer (Scaled to EXACT relative pixel dimensions!) */}
+                  {/* Uploaded Artwork Layer */}
                   {hasDesign && (
                     <div 
                       className="absolute z-0 flex items-center justify-center pointer-events-none transition-all"
@@ -284,194 +318,135 @@ export default function VisualInspectorModal({
                       <img
                         src={order.designImage}
                         alt="Uploaded Artwork Real Scale"
-                        className="w-full h-full object-fill rounded border border-amber-400/70 shadow-2xl bg-white/10"
+                        className="w-full h-full object-contain rounded border border-amber-400/70 shadow-2xl bg-white/10"
                       />
                     </div>
                   )}
                 </div>
               ) : (
-                /* SIDE-BY-SIDE MODE: BOTH CARDS ANCHORED TO SAME BASELINE SCALE */
+                /* SIDE-BY-SIDE MODE */
                 <div 
-                  className="grid grid-cols-2 gap-4 w-full h-full max-h-[460px] items-center justify-center"
+                  className="grid grid-cols-2 gap-4 w-full h-full max-h-[440px] items-center justify-center"
                   style={{ transform: `scale(${zoom / 100})`, transformOrigin: 'center center' }}
                 >
-                  {/* Card 1: Uploaded Design (Scaled to true relative physical size!) */}
-                  <div className="flex flex-col items-center justify-center p-3 bg-slate-900 rounded-xl border border-slate-800 h-full relative">
+                  {/* Card 1: Uploaded Design */}
+                  <div className="flex flex-col items-center justify-center p-3 bg-slate-900 rounded-xl border border-slate-800 h-full relative overflow-hidden">
                     <span className="text-[10px] font-bold text-slate-300 uppercase tracking-wider mb-2 text-center">
                       {hasDesign ? `Ảnh Thiết Kế Upload (${actualW}×${actualH}px)` : 'Ảnh Thiết Kế (Chưa Upload)'}
                     </span>
 
                     <div 
-                      className="relative flex items-center justify-center transition-all bg-slate-950/80 rounded p-1 border border-slate-700/80"
+                      className="relative flex items-center justify-center transition-all bg-slate-950/80 rounded p-1 border border-slate-700/80 max-h-[320px] max-w-full"
                       style={{ 
-                        width: '100%',
-                        maxWidth: templateAspectRatio >= 1 ? '270px' : `${270 * templateAspectRatio}px`,
                         aspectRatio: `${templateAspectRatio}`
                       }}
                     >
                       {hasDesign ? (
-                        <div 
-                          className="flex items-center justify-center transition-all"
-                          style={{
-                            width: `${Math.min(100, scaleWidthPct)}%`,
-                            height: `${Math.min(100, scaleHeightPct)}%`
-                          }}
-                        >
-                          <img
-                            src={order.designImage}
-                            alt="Design File Real Scale"
-                            className="w-full h-full object-fill rounded border border-orange-500 shadow-md"
-                          />
-                        </div>
+                        <img
+                          src={order.designImage}
+                          alt="Uploaded Design"
+                          className="max-h-[300px] max-w-full object-contain rounded"
+                        />
                       ) : (
-                        <div className="text-center p-6 text-slate-500 text-xs font-medium">
-                          (Chưa upload file thiết kế)
+                        <div className="w-48 h-48 flex items-center justify-center text-slate-500 text-xs font-bold">
+                          Chưa Upload Ảnh
                         </div>
                       )}
                     </div>
-
-                    {hasDesign && (
-                      <span className="mt-2 text-[9.5px] font-mono text-amber-400 font-bold bg-slate-950 px-2 py-0.5 rounded border border-slate-800">
-                        {scaleWidthPct < 100 ? `⚠️ Nhỏ hơn Safe Zone (${scaleWidthPct.toFixed(1)}% Rộng × ${scaleHeightPct.toFixed(1)}% Cao)` : scaleWidthPct > 100 ? `⚠️ To hơn Safe Zone (${scaleWidthPct.toFixed(1)}% Rộng × ${scaleHeightPct.toFixed(1)}% Cao)` : `✅ Khớp 100% kích thước`}
-                      </span>
-                    )}
                   </div>
 
-                  {/* Card 2: Safe Zone Template Baseline */}
-                  <div className="flex flex-col items-center justify-center p-3 bg-slate-900 rounded-xl border border-slate-800 h-full">
-                    <span className="text-[10px] font-bold text-slate-300 uppercase tracking-wider mb-2 text-center">
-                      Khung Safe Zone ({matchedTemplate.sizeLabel} - {targetW}×{targetH}px)
+                  {/* Card 2: Safe Zone Baseline Template */}
+                  <div className="flex flex-col items-center justify-center p-3 bg-slate-900 rounded-xl border border-slate-800 h-full relative overflow-hidden">
+                    <span className="text-[10px] font-bold text-amber-400 uppercase tracking-wider mb-2 text-center">
+                      Khung Safe Zone Mẫu ({targetW}×{targetH}px)
                     </span>
 
                     <div 
-                      className="relative flex items-center justify-center transition-all rounded"
+                      className="relative flex items-center justify-center transition-all bg-slate-950/80 rounded p-1 border border-slate-700/80 max-h-[320px] max-w-full"
                       style={{ 
-                        width: '100%',
-                        maxWidth: templateAspectRatio >= 1 ? '270px' : `${270 * templateAspectRatio}px`,
                         aspectRatio: `${templateAspectRatio}`
                       }}
                     >
-                      {matchedTemplate.templateImage ? (
+                      {templateImgSrc ? (
                         <img
-                          src={matchedTemplate.templateImage}
-                          alt="Template File Baseline"
-                          className="w-full h-full object-contain rounded border border-emerald-500/80 bg-slate-900 shadow-md"
+                          src={templateImgSrc}
+                          alt="Template Safe Zone Baseline"
+                          className="max-h-[300px] max-w-full object-contain rounded"
+                          onError={(e) => {
+                            e.target.onerror = null;
+                            e.target.src = '/_4123920413.png';
+                          }}
                         />
                       ) : (
-                        <div className="text-center p-6 text-slate-500 text-xs font-medium">
-                          (Chưa chọn Safe Zone Template)
+                        <div className="w-48 h-48 flex items-center justify-center text-slate-500 text-xs font-bold">
+                          Khung Template Standard
                         </div>
                       )}
                     </div>
-
-                    <span className="mt-2 text-[9.5px] font-mono text-emerald-400 font-bold bg-slate-950 px-2 py-0.5 rounded border border-slate-800">
-                      Standard Baseline 100% (1:1 Target)
-                    </span>
                   </div>
                 </div>
               )}
 
             </div>
 
+            {/* Scale Comparison Legend */}
+            <div className="mt-2.5 p-2 bg-white rounded-xl border border-slate-200 flex items-center justify-between text-xs shrink-0">
+              <div className="flex items-center gap-2">
+                <span className="w-2.5 h-2.5 rounded-full bg-amber-500"></span>
+                <span className="text-slate-700 font-bold">Tỷ Lệ Thực File Upload:</span>
+                <span className="font-mono text-slate-900 font-extrabold">{actualW}×{actualH} px</span>
+              </div>
+
+              <div className="flex items-center gap-2">
+                <span className="w-2.5 h-2.5 rounded-full bg-slate-900"></span>
+                <span className="text-slate-700 font-bold">Khung Template Mẫu:</span>
+                <span className="font-mono text-slate-900 font-extrabold">{targetW}×{targetH} px</span>
+              </div>
+            </div>
+
           </div>
 
-          {/* Right Inspection Summary */}
-          <div className="lg:col-span-4 bg-white p-4 flex flex-col justify-between overflow-y-auto space-y-3">
+          {/* Right Information & Action Panel */}
+          <div className="lg:col-span-4 p-5 bg-slate-50 overflow-y-auto space-y-4 flex flex-col justify-between">
             
-            <div className="space-y-3">
-              <h4 className="font-bold text-sm text-slate-900 flex items-center gap-2">
-                <Sliders className="w-4 h-4 text-orange-600" />
-                <span>Chi Tiết So Sánh Khung Kích Thước</span>
-              </h4>
-
-              {/* Specs Table */}
-              <div className="bg-slate-50 p-3 rounded-xl border border-slate-200 text-xs space-y-2 font-mono">
-                <div className="flex justify-between pb-1 border-b border-slate-200 text-slate-500 font-sans font-bold text-[11px]">
-                  <span>Thông số</span>
-                  <span>Ảnh Upload</span>
-                  <span>Khung Safe Zone</span>
-                </div>
-
-                <div className="flex justify-between text-slate-800">
-                  <span className="font-sans text-slate-600">Pixel ($W \times H$):</span>
-                  <span className={scaleWidthPct < 100 ? 'text-amber-700 font-bold' : 'text-slate-800'}>{hasDesign ? `${actualW}×${actualH}` : 'Chưa Up'}</span>
-                  <span className="text-orange-600 font-bold">{targetW}×{targetH}</span>
-                </div>
-
-                <div className="flex justify-between text-slate-800">
-                  <span className="font-sans text-slate-600">Tỷ lệ Rộng (Vs Safe Zone):</span>
-                  <span className={scaleWidthPct < 98.5 ? 'text-rose-600 font-extrabold' : 'text-emerald-600 font-extrabold'}>
-                    {hasDesign ? `${scaleWidthPct.toFixed(1)}%` : '-'}
-                  </span>
-                  <span className="text-slate-500">100% Standard</span>
-                </div>
-
-                <div className="flex justify-between text-slate-800">
-                  <span className="font-sans text-slate-600">Tỷ lệ Cao (Vs Safe Zone):</span>
-                  <span className={scaleHeightPct < 98.5 ? 'text-rose-600 font-extrabold' : 'text-emerald-600 font-extrabold'}>
-                    {hasDesign ? `${scaleHeightPct.toFixed(1)}%` : '-'}
-                  </span>
-                  <span className="text-slate-500">100% Standard</span>
-                </div>
-
-                <div className="flex justify-between text-slate-800 pt-1 border-t border-slate-200">
-                  <span className="font-sans text-slate-600">Độ lệch tỷ lệ khung:</span>
-                  <span className={!hasDesign ? 'text-slate-400 font-bold' : ratioResult.diffPercent > 1.5 ? 'text-rose-600 font-extrabold' : 'text-emerald-600 font-extrabold'}>
-                    {hasDesign ? `${ratioResult.diffPercent.toFixed(2)}%` : '-'}
-                  </span>
-                  <span className="text-slate-500">≤ {currentGroup.tolerancePercent || 1.5}%</span>
-                </div>
-              </div>
-            </div>
-
-            {/* Template Info Card */}
-            <div className="space-y-1.5">
-              <span className="text-[11px] font-bold text-slate-500 uppercase tracking-wider">
-                Khung Safe Zone Đang Sử Dụng:
-              </span>
+            <div className="space-y-4">
               
-              <div className="p-2.5 bg-slate-50 rounded-xl border border-slate-200 flex items-center justify-between text-xs">
-                <div className="flex items-center gap-2">
-                  <div className="w-7 h-7 rounded bg-orange-100 text-orange-600 flex items-center justify-center font-bold">
-                    📐
+              {/* Product Info Card */}
+              <div className="bg-white p-4 rounded-xl border border-slate-200 shadow-2xs space-y-2">
+                <h4 className="font-extrabold text-xs text-slate-400 uppercase tracking-wider">Thông Tin Đơn Hàng</h4>
+                <div className="text-xs space-y-1">
+                  <div className="font-extrabold text-slate-900 leading-snug">{order.productTitle}</div>
+                  <div className="text-slate-500 font-medium">SKU: <span className="font-mono text-slate-700 font-bold">{order.sku}</span></div>
+                </div>
+              </div>
+
+              {/* QC Details */}
+              <div className="bg-white p-4 rounded-xl border border-slate-200 shadow-2xs space-y-3">
+                <h4 className="font-extrabold text-xs text-slate-400 uppercase tracking-wider">Thông Số Kỹ Thuật QC</h4>
+                
+                <div className="grid grid-cols-2 gap-2 text-xs">
+                  <div className="p-2.5 bg-slate-50 rounded-lg border border-slate-200">
+                    <span className="text-[10px] text-slate-500 font-bold block">Tỷ Lệ Dài/Rộng:</span>
+                    <span className="font-mono font-extrabold text-slate-900 text-sm">{(actualW / actualH).toFixed(2)}</span>
                   </div>
-                  <div>
-                    <p className="font-bold text-slate-900">{matchedTemplate.sizeLabel}</p>
-                    <p className="text-[10px] text-slate-500 font-mono">{targetW} × {targetH} px</p>
+
+                  <div className="p-2.5 bg-slate-50 rounded-lg border border-slate-200">
+                    <span className="text-[10px] text-slate-500 font-bold block">Ngưỡng Cho Phép:</span>
+                    <span className="font-mono font-extrabold text-orange-600 text-sm">±{currentGroup.tolerancePercent || 1.5}%</span>
                   </div>
                 </div>
-                <span className="px-2 py-0.5 rounded bg-white text-slate-700 font-mono text-[10px] border border-slate-200 font-bold">
-                  {currentGroup.name}
-                </span>
               </div>
+
             </div>
 
-            {/* Personalization Info */}
-            <div className="space-y-1.5 bg-slate-50 p-3 rounded-xl border border-slate-200 text-xs">
-              <span className="font-bold text-slate-900 flex items-center gap-1.5 text-[11px]">
-                <Sparkles className="w-3.5 h-3.5 text-indigo-600" />
-                Nội Dung Chữ Cá Nhân Hóa (Etsy)
-              </span>
-
-              <div className="p-2 rounded bg-white text-slate-900 font-semibold border border-slate-200 text-xs">
-                "{order.personalization?.text || 'Không có'}"
-              </div>
-            </div>
-
-            <div className="pt-2 border-t border-slate-200 flex items-center gap-2">
+            {/* Run AI Scan Button */}
+            <div className="pt-2">
               <button
-                onClick={() => onRunAIScan(order)}
-                className="flex-1 py-2 rounded-xl bg-indigo-600 hover:bg-indigo-700 text-white font-bold text-xs flex items-center justify-center gap-1.5 shadow-sm transition"
+                onClick={() => onRunAIScan && onRunAIScan(order)}
+                className="w-full py-3 px-4 rounded-xl bg-gradient-to-r from-orange-500 to-amber-600 hover:from-orange-600 hover:to-amber-700 text-white font-extrabold text-xs flex items-center justify-center gap-2 shadow-md transition active:scale-95 cursor-pointer"
               >
-                <Sparkles className="w-3.5 h-3.5" />
-                <span>Quét AI So Chữ Khách</span>
-              </button>
-
-              <button
-                onClick={onClose}
-                className="px-4 py-2 rounded-xl bg-slate-100 hover:bg-slate-200 text-slate-800 text-xs font-bold transition"
-              >
-                Đóng
+                <Sparkles className="w-4 h-4" />
+                <span>Chạy AI Vision Scan OCR</span>
               </button>
             </div>
 
