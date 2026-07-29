@@ -86,8 +86,8 @@ export const validateAspectRatio = (actualWidth, actualHeight, targetWidth, targ
 // Months pattern to strip from person name lines (e.g. "Emilia - April" -> "Emilia")
 const MONTHS_PATTERN = /\b(?:january|february|march|april|may|june|july|august|september|october|november|december|jan|feb|mar|apr|jun|jul|aug|sep|oct|nov|dec)\b/gi;
 
-// System metadata labels to strip (e.g. Size:, Style:, Options:)
-const SYSTEM_LABELS_PATTERN = /^(?:Size|Style|Option|Options|Background|Kích thước|Mẫu|Căn lề|Layer|Color|Font|Note|Customer Note|Product Note)\s*[:=].*$/gmi;
+// System metadata labels to strip (e.g. Size:, Style:, Options:, Personalization:)
+const SYSTEM_LABELS_PATTERN = /^(?:Personalization|Size|Style|Option|Options|Background|Kích thước|Mẫu|Căn lề|Layer|Color|Font|Note|Customer Note|Product Note)\s*[:=].*$/gmi;
 
 /**
  * Smart Classifier: Extracts ONLY printed names & titles from raw customer text,
@@ -104,6 +104,10 @@ export const extractNamesAndTitleFromPersonalization = (rawText) => {
 
   for (let line of lines) {
     let trimmed = line.trim();
+    if (!trimmed) continue;
+
+    // Strip inline "Personalization" word or prefix
+    trimmed = trimmed.replace(/^Personalization\s*[:=]?\s*/i, '').trim();
     if (!trimmed) continue;
 
     // Remove separator dashes e.g. "---"
