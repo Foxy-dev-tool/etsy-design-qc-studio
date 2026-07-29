@@ -11,7 +11,7 @@ import {
   fetchOrdersFromPostgres, 
   updateOrderInPostgres 
 } from './services/postgresClient';
-import { Check, Loader2, Database } from 'lucide-react';
+import { Check, Loader2, Database, RefreshCw } from 'lucide-react';
 
 // Helper to convert File to Base64 Data URL
 const readFileAsDataURL = (file) => {
@@ -30,6 +30,7 @@ export default function App() {
   
   const [selectedOrders, setSelectedOrders] = useState([]);
   const [isLoadingOrders, setIsLoadingOrders] = useState(true);
+  const [totalInDbCount, setTotalInDbCount] = useState(11553);
 
   // Active Modals state
   const [inspectorOrder, setInspectorOrder] = useState(null);
@@ -42,14 +43,15 @@ export default function App() {
   // Load real-time orders from PostgreSQL via parallel chunk loader (ALL 11,553 orders)
   const loadLivePostgresOrders = async () => {
     try {
-      const dbOrders = await fetchOrdersFromPostgres((initialChunk, totalInDb) => {
-        if (initialChunk && Array.isArray(initialChunk)) {
-          setOrders(initialChunk);
+      const dbOrders = await fetchOrdersFromPostgres((currentChunk, totalCount) => {
+        if (currentChunk && Array.isArray(currentChunk)) {
+          setOrders(currentChunk);
+          setTotalInDbCount(totalCount || 11553);
           setIsPostgresConnected(true);
           setIsLoadingOrders(false);
         }
       });
-      if (dbOrders && Array.isArray(dbOrders)) {
+      if (dbOrders && Array.isArray(dbOrders) && dbOrders.length > 0) {
         setOrders(dbOrders);
         setIsPostgresConnected(true);
       }
@@ -350,9 +352,9 @@ export default function App() {
 
       {/* Loading Bar when fetching initial DB orders */}
       {isLoadingOrders && (
-        <div className="bg-indigo-600 text-white px-4 py-2.5 text-xs font-bold flex items-center justify-center gap-2 shadow-sm animate-pulse">
+        <div className="bg-gradient-to-r from-orange-500 to-amber-600 text-white px-4 py-2.5 text-xs font-bold flex items-center justify-center gap-2 shadow-sm animate-pulse">
           <Loader2 className="w-4 h-4 animate-spin text-white" />
-          <span>⚡ Đang tải dữ liệu thực tế từ PostgreSQL Database (103.75.184.164:5432)...</span>
+          <span>⚡ Đang nạp dữ liệu thực tế từ PostgreSQL Database... (Đã tải {orders.length.toLocaleString()} / {totalInDbCount.toLocaleString()} đơn hàng)</span>
         </div>
       )}
 

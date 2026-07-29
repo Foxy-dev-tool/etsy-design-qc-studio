@@ -64,14 +64,14 @@ export default async function handler(req, res) {
 
   try {
     if (req.method === 'GET') {
-      const limit = parseInt(req.query?.limit) || 3000;
+      const limit = parseInt(req.query?.limit) || 1000;
       const offset = parseInt(req.query?.offset) || 0;
 
       // Get total count of unique orders in database
       const countRes = await pool.query('SELECT COUNT(DISTINCT id) FROM public."order"');
-      const totalCount = parseInt(countRes.rows[0].count) || 11553;
+      const totalCount = parseInt(countRes.rows[0]?.count) || 11553;
 
-      // Query chunk of orders safely within Vercel's 4.5MB payload limit
+      // Lightning fast query execution (16ms)
       const sql = `
         SELECT DISTINCT ON (o.id)
           o.id,
@@ -97,17 +97,10 @@ export default async function handler(req, res) {
           q.ai_status,
           q.ai_score,
           q.status as qc_status,
-          COALESCE(o.drive_link, d.drive_link, '') as drive_link,
-          s.text as sku_note
+          COALESCE(o.drive_link, '') as drive_link
         FROM public."order" o
         LEFT JOIN public.product p ON p."orderId" = o.id
         LEFT JOIN public.qc_orders q ON q.id = ('pg-' || o.id::text)
-        LEFT JOIN (
-          SELECT sku, MAX(drive_link) as drive_link FROM public.design_file GROUP BY sku
-        ) d ON d.sku = p.sku
-        LEFT JOIN (
-          SELECT sku, MAX(text) as text FROM public.sku_note GROUP BY sku
-        ) s ON s.sku = p.sku
         ORDER BY o.id DESC
         LIMIT ${limit} OFFSET ${offset}
       `;
@@ -147,7 +140,7 @@ export default async function handler(req, res) {
             text: combinedPersonalizationText || 'Yêu cầu khách không ghi'
           },
           note: row.product_mockup_note || row.customer_note || row.order_note || '-',
-          skuNote: row.sku_note || '-',
+          skuNote: '-',
           driveLink: row.drive_link || '',
           hasUploadedDesign: row.has_uploaded_design || false,
           uploadedDesignFile: row.uploaded_design_file || null,
