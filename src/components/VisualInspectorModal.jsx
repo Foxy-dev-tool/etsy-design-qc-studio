@@ -16,7 +16,9 @@ import {
   Zap,
   Trash2
 } from 'lucide-react';
-import { validateAspectRatio, getSafeImgSrc } from '../services/imageAnalyzer';
+import { validateAspectRatio } from '../services/imageAnalyzer';
+
+const getSafeImgSrc = (path) => path || '/_4123920413.png';
 
 export default function VisualInspectorModal({
   order,
