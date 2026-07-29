@@ -55,6 +55,34 @@ const formatDateAndTime = (dateStr) => {
   return { datePart: String(dateStr), timePart: '' };
 };
 
+// Dynamic client-side size parser from personalization text
+const parseSizeFromText = (fullText = '') => {
+  if (!fullText || !fullText.trim()) return '';
+
+  // 1. Line starting with Size: / size: / Kích thước: / Dimensions:
+  const lineMatch = fullText.match(/(?:Size|size|Kích thước|Dimensions)\s*[:=]\s*([^\n\r,]+)/i);
+  if (lineMatch && lineMatch[1] && lineMatch[1].trim()) {
+    const candidate = lineMatch[1].trim();
+    if (!candidate.toLowerCase().startsWith('1 layer') && !candidate.toLowerCase().startsWith('2 layer')) {
+      return candidate;
+    }
+  }
+
+  // 2. Explicit dimension patterns e.g. 8x8, 8×8, 60" x 50", 10x10, 3.94 in, 12in-18in
+  const dimMatch = fullText.match(/(\d+(?:\.\d+)?\s*(?:in|inch|inches|cm|X\d+|\d+\s*["″]?\s*[x×*]\s*\d+["″]?|\d+in-\d+in))/i);
+  if (dimMatch && dimMatch[1] && dimMatch[1].trim()) {
+    return dimMatch[1].trim();
+  }
+
+  // 3. Clothing size e.g. 2XL, XL, Small, Medium, Large
+  const clothingMatch = fullText.match(/\b(XS|S|M|L|XL|2XL|3XL|4XL|5XL|Small|Medium|Large|X-Large|2X-Large|3X-Large)\b/i);
+  if (clothingMatch && clothingMatch[1] && clothingMatch[1].trim()) {
+    return clothingMatch[1].trim();
+  }
+
+  return '';
+};
+
 // Fail-proof template matcher
 const getMatchedTemplateForGroup = (group, orderSizeText = '') => {
   const defaultFallback = { sizeLabel: 'Standard', widthPx: 3012, heightPx: 3012, tmplFile: '/_4123920413.png' };
@@ -330,7 +358,11 @@ export default function OrderListTable({
 
                   const isSelected = selectedOrders.includes(order.id);
                   const rawText = order.personalization?.text || '';
-                  const hasExplicitSizeInCustomerText = Boolean(order.personalization?.size && String(order.personalization.size).trim() !== '');
+                  
+                  // Accurate size recognition from order.personalization.size or rawText
+                  const detectedSize = (order.personalization?.size && String(order.personalization.size).trim()) || parseSizeFromText(rawText);
+                  const hasExplicitSizeInCustomerText = Boolean(detectedSize && detectedSize.trim() !== '');
+
                   const cleanNote = formatNoteDisplay(order.note);
                   const { datePart, timePart } = formatDateAndTime(order.orderDate);
 
@@ -339,7 +371,7 @@ export default function OrderListTable({
                   const currentGroupObj = safeGroups.find(g => g && g.name === currentGroupName) || safeGroups[0];
                   const matchedTmpl = getMatchedTemplateForGroup(
                     currentGroupObj, 
-                    order.personalization?.size || ''
+                    detectedSize
                   );
 
                   return (
@@ -447,7 +479,7 @@ export default function OrderListTable({
                         </td>
                       )}
 
-                      {/* 5. Dynamic Product Group Dropdown & 8 Safe Zone Groups */}
+                      {/* 5. Dynamic Product Group Dropdown & Safe Zone Match */}
                       {isColVisible('productGroupSelect') && (
                         <td className="p-3 align-top">
                           <div className="space-y-2">
