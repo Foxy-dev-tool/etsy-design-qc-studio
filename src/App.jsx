@@ -40,19 +40,14 @@ export default function App() {
   const [csvNotifyMsg, setCsvNotifyMsg] = useState('');
   const [isPostgresConnected, setIsPostgresConnected] = useState(false);
 
-  // Load real-time orders from PostgreSQL via parallel chunk loader (ALL 11,553 orders)
+  // Load real-time orders from PostgreSQL IN 1 SINGLE COMPLETE UPDATE (No intermediate screen jumping)
   const loadLivePostgresOrders = async () => {
+    setIsLoadingOrders(true);
     try {
-      const dbOrders = await fetchOrdersFromPostgres((currentChunk, totalCount) => {
-        if (currentChunk && Array.isArray(currentChunk)) {
-          setOrders(currentChunk);
-          setTotalInDbCount(totalCount || 11553);
-          setIsPostgresConnected(true);
-          setIsLoadingOrders(false);
-        }
-      });
+      const dbOrders = await fetchOrdersFromPostgres();
       if (dbOrders && Array.isArray(dbOrders) && dbOrders.length > 0) {
         setOrders(dbOrders);
+        setTotalInDbCount(dbOrders.length);
         setIsPostgresConnected(true);
       }
     } catch (err) {
@@ -62,11 +57,9 @@ export default function App() {
     }
   };
 
-  // Initial fetch & Real-time Auto Refresh polling every 30s from PostgreSQL
+  // Initial fetch ONCE on mount (No auto-polling interval to prevent screen jumping)
   useEffect(() => {
     loadLivePostgresOrders();
-    const interval = setInterval(loadLivePostgresOrders, 30000);
-    return () => clearInterval(interval);
   }, []);
 
   // Sync Etsy API simulation

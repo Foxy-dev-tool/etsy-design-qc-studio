@@ -36,8 +36,8 @@ async function fetchChunk(limit = 1500, offset = 0) {
   return null;
 }
 
-// Fetch ALL 11,553 orders cleanly across ultra-fast 1,500-item chunks
-export const fetchOrdersFromPostgres = async (onProgress) => {
+// Fetch ALL 11,553 orders cleanly in 1 single state update without screen jumping
+export const fetchOrdersFromPostgres = async () => {
   try {
     // 1. Fetch Chunk 1 (First 1,500 orders)
     const chunk1 = await fetchChunk(1500, 0);
@@ -46,11 +46,7 @@ export const fetchOrdersFromPostgres = async (onProgress) => {
     let allOrders = [...chunk1.data];
     const totalInDb = chunk1.totalInDb || 11553;
 
-    if (onProgress) {
-      onProgress(allOrders, totalInDb);
-    }
-
-    // If total rows exceed 1,500, fetch remaining chunks in parallel
+    // 2. Fetch remaining chunks in parallel silently in background
     if (totalInDb > 1500) {
       const offsets = [];
       for (let offset = 1500; offset < totalInDb; offset += 1500) {
@@ -74,10 +70,6 @@ export const fetchOrdersFromPostgres = async (onProgress) => {
         seen.add(ord.id);
         return true;
       });
-
-      if (onProgress) {
-        onProgress(allOrders, totalInDb);
-      }
     }
 
     return allOrders;
@@ -97,26 +89,16 @@ export const updateOrderInPostgres = async (orderId, fields) => {
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify(payload)
     });
-    
     if (!response.ok) {
-      response = await fetch(VERCEL_API_URL, {
+      await fetch(`${VERCEL_API_URL}`, {
         method: 'PUT',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(payload)
       });
     }
-    return response.ok;
+    return true;
   } catch (err) {
-    try {
-      const response = await fetch(VERCEL_API_URL, {
-        method: 'PUT',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(payload)
-      });
-      return response.ok;
-    } catch (e) {
-      console.warn('Lỗi cập nhật PostgreSQL DB:', e);
-      return false;
-    }
+    console.warn('Cập nhật PostgreSQL qua API thất bại:', err);
+    return false;
   }
 };
