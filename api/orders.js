@@ -64,15 +64,14 @@ export default async function handler(req, res) {
 
   try {
     if (req.method === 'GET') {
-      const limitParam = req.query?.limit;
-      let limitClause = 'LIMIT 2500'; // Default to 2,500 most recent orders for ultra-fast load speed
-      if (limitParam === 'all') {
-        limitClause = ''; // Return all orders if requested
-      } else if (limitParam && !isNaN(parseInt(limitParam))) {
-        limitClause = `LIMIT ${parseInt(limitParam)}`;
-      }
+      const limit = parseInt(req.query?.limit) || 3000;
+      const offset = parseInt(req.query?.offset) || 0;
 
-      // Query real live orders from public."order" master table with optimized fields
+      // Get total count of unique orders in database
+      const countRes = await pool.query('SELECT COUNT(DISTINCT id) FROM public."order"');
+      const totalCount = parseInt(countRes.rows[0].count) || 11553;
+
+      // Query chunk of orders safely within Vercel's 4.5MB payload limit
       const sql = `
         SELECT DISTINCT ON (o.id)
           o.id,
@@ -110,7 +109,7 @@ export default async function handler(req, res) {
           SELECT sku, MAX(text) as text FROM public.sku_note GROUP BY sku
         ) s ON s.sku = p.sku
         ORDER BY o.id DESC
-        ${limitClause}
+        LIMIT ${limit} OFFSET ${offset}
       `;
 
       const queryRes = await pool.query(sql);
@@ -119,7 +118,6 @@ export default async function handler(req, res) {
         const parsedSize = parseSize(row.description_raw, row.personalization_raw);
         const fullDateTime = formatFullDateTime(row.created_at);
 
-        // Build concise personalization text
         const personalizationParts = [];
         if (row.personalization_raw && row.personalization_raw.trim()) {
           personalizationParts.push(row.personalization_raw.trim());
@@ -139,8 +137,6 @@ export default async function handler(req, res) {
           orderDate: fullDateTime,
           storeName: 'Etsy Shop',
           customerName: row.customer_name || '',
-          customerEmail: '',
-          storeIcon: 'Etsy',
           orderNumber: row.order_number || `#${row.id}`,
           productTitle: row.product_title || '',
           productGroup: matchedGroup,
@@ -158,20 +154,22 @@ export default async function handler(req, res) {
           designImage: row.design_image || null,
           designWidth: row.design_width || null,
           designHeight: row.design_height || null,
-          designAspectRatio: row.design_width && row.design_height ? row.design_width / row.design_height : null,
-          targetSizeLabel: parsedSize,
-          targetWidth: null,
-          targetHeight: null,
           ratioStatus: row.ratio_status || 'NEEDS_CHECK',
           aiStatus: row.ai_status || 'NEEDS_SCAN',
           aiScore: row.ai_score || null,
           status: row.qc_status || 'Chờ kiểm tra',
-          mockupThumb: row.mockup_thumb || '/_4123920413.png',
-          assignee: 'Dakuho (QC SP)'
+          mockupThumb: row.mockup_thumb || '/_4123920413.png'
         };
       });
 
-      return res.status(200).json({ success: true, count: orders.length, data: orders });
+      return res.status(200).json({ 
+        success: true, 
+        totalInDb: totalCount,
+        count: orders.length, 
+        limit, 
+        offset, 
+        data: orders 
+      });
     }
 
     if (req.method === 'PUT') {
@@ -180,7 +178,6 @@ export default async function handler(req, res) {
         return res.status(400).json({ error: 'Missing orderId' });
       }
 
-      // Upsert order QC status and design image into qc_orders table
       const sql = `
         INSERT INTO public.qc_orders (
           id, order_number, product_group, status, ratio_status, ai_status,

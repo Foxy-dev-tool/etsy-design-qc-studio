@@ -39,14 +39,19 @@ export default function App() {
   const [csvNotifyMsg, setCsvNotifyMsg] = useState('');
   const [isPostgresConnected, setIsPostgresConnected] = useState(false);
 
-  // Load real-time orders from PostgreSQL order_info table
+  // Load real-time orders from PostgreSQL via parallel chunk loader (ALL 11,553 orders)
   const loadLivePostgresOrders = async () => {
     try {
-      const dbOrders = await fetchOrdersFromPostgres();
+      const dbOrders = await fetchOrdersFromPostgres((initialChunk, totalInDb) => {
+        if (initialChunk && Array.isArray(initialChunk)) {
+          setOrders(initialChunk);
+          setIsPostgresConnected(true);
+          setIsLoadingOrders(false);
+        }
+      });
       if (dbOrders && Array.isArray(dbOrders)) {
         setOrders(dbOrders);
         setIsPostgresConnected(true);
-        setIsLoadingOrders(false);
       }
     } catch (err) {
       console.error('Error loading PostgreSQL orders:', err);
@@ -55,10 +60,10 @@ export default function App() {
     }
   };
 
-  // Initial fetch & Real-time Auto Refresh polling every 10s from PostgreSQL
+  // Initial fetch & Real-time Auto Refresh polling every 30s from PostgreSQL
   useEffect(() => {
     loadLivePostgresOrders();
-    const interval = setInterval(loadLivePostgresOrders, 10000);
+    const interval = setInterval(loadLivePostgresOrders, 30000);
     return () => clearInterval(interval);
   }, []);
 
