@@ -23,6 +23,34 @@ const readFileAsDataURL = (file) => {
   });
 };
 
+// Helper to compress image for lightweight storage & instant DB sync (~50KB)
+const compressImageForStorage = (dataUrl, maxDim = 800, quality = 0.85) => {
+  return new Promise((resolve) => {
+    const img = new Image();
+    img.onload = () => {
+      let w = img.width;
+      let h = img.height;
+      if (w > maxDim || h > maxDim) {
+        if (w > h) {
+          h = Math.round((h * maxDim) / w);
+          w = maxDim;
+        } else {
+          w = Math.round((w * maxDim) / h);
+          h = maxDim;
+        }
+      }
+      const canvas = document.createElement('canvas');
+      canvas.width = w;
+      canvas.height = h;
+      const ctx = canvas.getContext('2d');
+      ctx.drawImage(img, 0, 0, w, h);
+      resolve(canvas.toDataURL('image/jpeg', quality));
+    };
+    img.onerror = () => resolve(dataUrl);
+    img.src = dataUrl;
+  });
+};
+
 export default function App() {
   const [activeTab, setActiveTab] = useState('orders'); // 'orders', 'config'
   const [orders, setOrders] = useState([]); // Real PostgreSQL orders array
@@ -46,8 +74,25 @@ export default function App() {
     try {
       const dbOrders = await fetchOrdersFromPostgres();
       if (dbOrders && Array.isArray(dbOrders) && dbOrders.length > 0) {
-        setOrders(dbOrders);
-        setTotalInDbCount(dbOrders.length);
+        // Merge with local fail-safe storage to ensure images stay 100% persistent on reload
+        const mergedOrders = dbOrders.map(ord => {
+          const localSavedImg = localStorage.getItem(`qc_design_img_${ord.id}`);
+          const localSavedMeta = localStorage.getItem(`qc_design_meta_${ord.id}`);
+          let metaObj = {};
+          if (localSavedMeta) {
+            try { metaObj = JSON.parse(localSavedMeta); } catch(e) {}
+          }
+          const designImage = localSavedImg || ord.designImage;
+          const hasUploadedDesign = Boolean(designImage) || ord.hasUploadedDesign;
+          return {
+            ...ord,
+            ...metaObj,
+            designImage,
+            hasUploadedDesign
+          };
+        });
+        setOrders(mergedOrders);
+        setTotalInDbCount(mergedOrders.length);
         setIsPostgresConnected(true);
       }
     } catch (err) {
@@ -119,12 +164,29 @@ export default function App() {
       );
 
       const newStatus = ratioCheck.isValid ? 'Thành công' : 'Lỗi';
+      const compressedDataUrl = await compressImageForStorage(localDataUrl, 800, 0.85);
+
+      // Save to localStorage as instant fail-safe backup
+      try {
+        localStorage.setItem(`qc_design_img_${targetOrder.id}`, compressedDataUrl);
+        localStorage.setItem(`qc_design_meta_${targetOrder.id}`, JSON.stringify({
+          hasUploadedDesign: true,
+          uploadedDesignFile: imageFile.name,
+          designWidth: dimensions.width,
+          designHeight: dimensions.height,
+          designAspectRatio: dimensions.aspectRatio,
+          ratioStatus: ratioCheck.isValid ? 'MATCH' : 'MISMATCH',
+          status: newStatus
+        }));
+      } catch (e) {
+        console.warn('LocalStorage save warning:', e);
+      }
 
       const updates = {
         productGroup: group.name,
         hasUploadedDesign: true,
         uploadedDesignFile: imageFile.name,
-        designImage: localDataUrl,
+        designImage: compressedDataUrl,
         designWidth: dimensions.width,
         designHeight: dimensions.height,
         designAspectRatio: dimensions.aspectRatio,
@@ -165,6 +227,11 @@ export default function App() {
 
   // DELETE UPLOADED DESIGN IMAGE PIPELINE
   const handleDeleteDesign = (targetOrder) => {
+    try {
+      localStorage.removeItem(`qc_design_img_${targetOrder.id}`);
+      localStorage.removeItem(`qc_design_meta_${targetOrder.id}`);
+    } catch (e) {}
+
     const updates = {
       productGroup: targetOrder.productGroup,
       hasUploadedDesign: false,
