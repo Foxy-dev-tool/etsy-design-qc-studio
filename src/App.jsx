@@ -121,6 +121,7 @@ export default function App() {
       const newStatus = ratioCheck.isValid ? 'Thành công' : 'Lỗi';
 
       const updates = {
+        productGroup: group.name,
         hasUploadedDesign: true,
         uploadedDesignFile: imageFile.name,
         designImage: localDataUrl,
@@ -165,6 +166,7 @@ export default function App() {
   // DELETE UPLOADED DESIGN IMAGE PIPELINE
   const handleDeleteDesign = (targetOrder) => {
     const updates = {
+      productGroup: targetOrder.productGroup,
       hasUploadedDesign: false,
       uploadedDesignFile: null,
       designImage: null,
@@ -223,6 +225,7 @@ export default function App() {
       const newStatus = ratioCheck.isValid ? 'Thành công' : 'Lỗi';
 
       const updates = {
+        productGroup: groupObj ? groupObj.name : targetOrder.productGroup,
         designWidth: dimensions.width,
         designHeight: dimensions.height,
         designAspectRatio: dimensions.aspectRatio,

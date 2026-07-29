@@ -209,15 +209,15 @@ export default async function handler(req, res) {
 
       await pool.query(sql, [
         orderId,
-        fields.productGroup || 'Stained Glass Suncatcher',
-        fields.status || 'Chờ kiểm tra',
-        fields.ratioStatus || 'NEEDS_CHECK',
-        fields.aiStatus || 'NEEDS_SCAN',
-        fields.hasUploadedDesign || false,
-        fields.uploadedDesignFile || null,
-        fields.designImage || null,
-        fields.designWidth || null,
-        fields.designHeight || null
+        fields.productGroup || null,
+        fields.status || null,
+        fields.ratioStatus || null,
+        fields.aiStatus || null,
+        fields.hasUploadedDesign !== undefined ? fields.hasUploadedDesign : null,
+        fields.uploadedDesignFile !== undefined ? fields.uploadedDesignFile : null,
+        fields.designImage !== undefined ? fields.designImage : null,
+        fields.designWidth !== undefined ? fields.designWidth : null,
+        fields.designHeight !== undefined ? fields.designHeight : null
       ]);
 
       return res.status(200).json({ success: true });
