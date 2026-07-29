@@ -126,10 +126,20 @@ export default function AIScannerModal({
 
                     <div className="grid grid-cols-2 gap-3">
                       <div className="p-3 rounded-lg bg-white border border-slate-200 space-y-1">
-                        <span className="text-[10px] text-slate-500 font-semibold">Yêu cầu Etsy (Khách đặt):</span>
-                        <p className="font-extrabold text-amber-700 text-xs">
-                          "{order.personalization?.text || 'None'}"
-                        </p>
+                        <span className="text-[10px] text-slate-500 font-semibold block">Tên & Chữ Cá Nhân Hóa (Đã Phân Loại):</span>
+                        {report.targetNames && report.targetNames.length > 0 ? (
+                          <div className="flex flex-wrap gap-1 mt-1">
+                            {report.targetNames.map((name, i) => (
+                              <span key={i} className="px-2 py-0.5 rounded bg-amber-50 text-amber-800 border border-amber-200 font-extrabold text-[11px]">
+                                {name}
+                              </span>
+                            ))}
+                          </div>
+                        ) : (
+                          <p className="font-extrabold text-amber-700 text-xs">
+                            "{order.personalization?.text || 'None'}"
+                          </p>
+                        )}
                       </div>
 
                       <div className="p-3 rounded-lg bg-white border border-slate-200 space-y-1">

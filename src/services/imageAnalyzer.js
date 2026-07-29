@@ -83,60 +83,88 @@ export const validateAspectRatio = (actualWidth, actualHeight, targetWidth, targ
   };
 };
 
+// Months pattern to strip from person name lines (e.g. "Emilia - April" -> "Emilia")
+const MONTHS_PATTERN = /\b(?:january|february|march|april|may|june|july|august|september|october|november|december|jan|feb|mar|apr|jun|jul|aug|sep|oct|nov|dec)\b/gi;
+
+// System metadata labels to strip (e.g. Size:, Style:, Options:)
+const SYSTEM_LABELS_PATTERN = /^(?:Size|Style|Option|Options|Background|Kích thước|Mẫu|Căn lề|Layer|Color|Font|Note|Customer Note|Product Note)\s*[:=].*$/gmi;
+
 /**
- * Strict Keyword & Word Matching Engine
+ * Smart Classifier: Extracts ONLY printed names & titles from raw customer text,
+ * stripping out metadata (Size, Style, Options) and birth months (April, February, January...)
  */
-export const compareTexts = (targetText, scannedText) => {
-  if (!targetText || !scannedText) return { match: false, score: 0, missingWords: [], foundWords: [] };
+export const extractNamesAndTitleFromPersonalization = (rawText) => {
+  if (!rawText || !rawText.trim()) return [];
 
-  // Strip system labels like "Size:", "Style:", "Personalization:", etc.
-  const cleanTarget = targetText
-    .replace(/(?:Size\s*(?:\([^)]*\))?|Style|Personalization|Dimensions|Select Size|Khách đặt Size)\s*[:=]/gi, '')
-    .toLowerCase()
-    .replace(/[^a-z0-9\s]/g, ' ')
-    .trim();
+  // Remove system metadata lines
+  const cleanedText = rawText.replace(SYSTEM_LABELS_PATTERN, '');
 
-  const cleanScanned = scannedText
-    .toLowerCase()
-    .replace(/[^a-z0-9\s]/g, ' ')
-    .trim();
+  const lines = cleanedText.split('\n');
+  const extractedNames = [];
 
-  if (!cleanTarget) return { match: true, score: 100, missingWords: [], foundWords: [] };
+  for (let line of lines) {
+    let trimmed = line.trim();
+    if (!trimmed) continue;
 
-  // Filter out irrelevant words like "inches", "size", "style", "1-", "2-"
-  const stopWords = new Set(['inch', 'inches', 'style', 'size', 'personalization', 'heart', 'options', 'background']);
-  const targetWords = cleanTarget
-    .split(/\s+/)
-    .filter(w => w.length > 1 && !stopWords.has(w) && isNaN(w));
+    // Remove separator dashes e.g. "---"
+    if (trimmed.startsWith('---') || trimmed.startsWith('===')) continue;
 
-  if (targetWords.length === 0) return { match: true, score: 100, missingWords: [], foundWords: [] };
+    // Remove line number prefixes e.g. "1-", "2-", "1.", "2.", "Line 1:"
+    trimmed = trimmed.replace(/^(?:line\s*\d+|[\d]+[\.\-\)\:]\s*)/i, '').trim();
+    if (!trimmed) continue;
 
-  const foundWords = [];
-  const missingWords = [];
+    // Remove month tags e.g. "Emilia - April" -> "Emilia", "Kylie- February" -> "Kylie"
+    trimmed = trimmed.replace(MONTHS_PATTERN, '').replace(/[\-\–\—\(\)\,\:]/g, ' ').trim();
 
-  for (const word of targetWords) {
-    if (cleanScanned.includes(word)) {
-      foundWords.push(word);
-    } else {
-      missingWords.push(word);
+    // Clean extra whitespace
+    trimmed = trimmed.replace(/\s+/g, ' ');
+
+    if (trimmed.length >= 2 && !/^\d+$/.test(trimmed)) {
+      extractedNames.push(trimmed);
     }
   }
 
-  const score = Math.round((foundWords.length / targetWords.length) * 100);
+  return extractedNames;
+};
 
-  // Strict match requires at least 85% of key words (e.g. names) to be found in OCR
-  const match = score >= 85 && missingWords.length === 0;
+/**
+ * Strict Name & Keyword Matching Engine
+ */
+export const compareTexts = (targetText, scannedText) => {
+  if (!targetText || !scannedText) return { match: false, score: 0, missingNames: [], targetNames: [] };
+
+  const targetNames = extractNamesAndTitleFromPersonalization(targetText);
+  if (targetNames.length === 0) return { match: true, score: 100, missingNames: [], targetNames: [] };
+
+  const cleanScanned = scannedText.toLowerCase().replace(/[^a-z0-9\s]/g, ' ');
+
+  const foundNames = [];
+  const missingNames = [];
+
+  for (const name of targetNames) {
+    const nameWords = name.toLowerCase().split(/\s+/).filter(w => w.length > 1);
+    const allWordsFound = nameWords.every(w => cleanScanned.includes(w));
+    if (allWordsFound) {
+      foundNames.push(name);
+    } else {
+      missingNames.push(name);
+    }
+  }
+
+  const score = Math.round((foundNames.length / targetNames.length) * 100);
+  const match = missingNames.length === 0;
 
   return {
     match,
     score,
-    foundWords,
-    missingWords
+    targetNames,
+    foundNames,
+    missingNames
   };
 };
 
 /**
- * REAL Offline OCR & Computer Vision Engine using Tesseract.js (Strict & Honest Verification)
+ * REAL Offline OCR & Computer Vision Engine using Tesseract.js (Strict & Classified Verification)
  */
 export const runAIScanSimulated = async (order, designImageUrl, aiCustomPrompt = '') => {
   const targetText = order.personalization?.text || '';
@@ -152,10 +180,9 @@ export const runAIScanSimulated = async (order, designImageUrl, aiCustomPrompt =
     const ocrLines = rawOcrText.split('\n').map(l => l.trim()).filter(Boolean);
     const confidence = Math.round(ret.data.confidence || 0);
 
-    // 2. Perform Strict Text Comparison
+    // 2. Perform Classified Name & Title Comparison
     const comparison = compareTexts(targetText, rawOcrText);
 
-    // 3. Honest Evaluation: NO Fake 95% Fallback!
     let isTextMatch = false;
     let confidenceScore = 0;
     let detailsMsg = '';
@@ -164,25 +191,27 @@ export const runAIScanSimulated = async (order, designImageUrl, aiCustomPrompt =
     if (ocrLines.length === 0) {
       isTextMatch = false;
       confidenceScore = 0;
-      detailsMsg = `⚠️ Không tự động quét được chữ từ ảnh (do font chữ uốn lượn/nghệ thuật/ảnh tối màu). QC cần đối chiếu thủ công với yêu cầu khách đặt.`;
-      suggestionMsg = '⚠️ OCR không đọc được chữ uốn lượn trên ảnh. QC cần đối chiếu tên/chữ cá nhân hóa thủ công trước khi duyệt in!';
+      detailsMsg = `⚠️ Không tự động quét được chữ từ ảnh (do font chữ uốn lượn/nghệ thuật/ảnh tối màu). QC cần đối chiếu thủ công với danh sách tên khách đặt: [${comparison.targetNames.join(', ')}]`;
+      suggestionMsg = '⚠️ OCR không đọc được chữ uốn lượn trên ảnh. QC cần đối chiếu tên cá nhân hóa thủ công trước khi duyệt in!';
     } else if (comparison.match) {
       isTextMatch = true;
       confidenceScore = Math.max(confidence, comparison.score);
-      detailsMsg = `✅ Tự động quét OCR thành công! Tìm thấy đầy đủ từ khóa chữ cá nhân hóa từ ảnh khớp với yêu cầu khách.`;
-      suggestionMsg = '✅ Thiết kế hoàn toàn chính xác! OCR đã tự động đọc và đối chiếu duyệt cho khâu in ấn.';
+      detailsMsg = `✅ Tự động quét OCR thành công! Đã tìm thấy đầy đủ ${comparison.targetNames.length} tên cá nhân hóa trên ảnh: [${comparison.targetNames.join(', ')}]`;
+      suggestionMsg = '✅ Thiết kế hoàn toàn chính xác! Tất cả các tên cá nhân hóa đều được in đúng 100%.';
     } else {
       isTextMatch = false;
       confidenceScore = comparison.score;
-      const missingInfo = comparison.missingWords.length > 0 ? ` [Thiếu/sai các từ: ${comparison.missingWords.slice(0, 5).join(', ')}]` : '';
-      detailsMsg = `❌ CẢNH BÁO SAI CHỮ CÁ NHÂN HÓA! Chữ quét được trên ảnh ("${ocrLines.join(' ')}") KHÔNG KHỚP với yêu cầu khách đặt${missingInfo}.`;
-      suggestionMsg = `❌ PHÁT HIỆN SAI CHỮ CÁ NHÂN HÓA! Chữ trên ảnh bị thiếu hoặc sai từ: ${comparison.missingWords.length > 0 ? comparison.missingWords.join(', ') : 'Chữ trên ảnh không khớp'}. QC tuyệt đối KHÔNG duyệt in đơn này!`;
+      const missingListStr = comparison.missingNames.join(', ');
+      detailsMsg = `❌ CẢNH BÁO SAI CHỮ CÁ NHÂN HÓA! Tên in trên ảnh không khớp với danh sách tên khách đặt. Thiếu hoặc sai các tên: [${missingListStr}]`;
+      suggestionMsg = `❌ PHÁT HIỆN SAI CHỮ CÁ NHÂN HÓA! Tên in trên ảnh bị thiếu hoặc sai: [${missingListStr}]. QC tuyệt đối KHÔNG duyệt in đơn này!`;
     }
 
     return {
       confidence: confidenceScore,
       status: isTextMatch ? 'MATCH' : 'TEXT_MISMATCH',
       detectedText: ocrLines.length > 0 ? ocrLines : ['(Không quét được chữ từ ảnh - Font nghệ thuật/Cursive)'],
+      targetNames: comparison.targetNames,
+      missingNames: comparison.missingNames,
       textMatch: isTextMatch,
       textMatchDetails: detailsMsg,
       ratioCheckPassed: order.ratioStatus === 'MATCH',
@@ -197,6 +226,8 @@ export const runAIScanSimulated = async (order, designImageUrl, aiCustomPrompt =
       confidence: 0,
       status: 'TEXT_MISMATCH',
       detectedText: ['(Lỗi nhận diện OCR - Cần QC đối chiếu thủ công)'],
+      targetNames: [],
+      missingNames: [],
       textMatch: false,
       textMatchDetails: `⚠️ Không thể quét tự động. Đề nghị QC đối chiếu nội dung chữ thủ công.`,
       ratioCheckPassed: false,
