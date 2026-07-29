@@ -15,41 +15,28 @@ const pool = new Pool({
 // Helper to parse size strictly from description / personalization text
 function parseSize(descriptionText, personalizationText) {
   const fullText = (descriptionText || '') + ' ' + (personalizationText || '');
-  const match = fullText.match(/(\d+(?:\.\d+)?\s*(?:in|inch|inches|cm|X\d+cm|x\d+cm))/i);
+  const match = fullText.match(/(\d+(?:\.\d+)?\s*(?:in|inch|inches|cm|X\d+cm|x\d+cm|\d+x\d+|\d+\*\d+))/i);
   if (match) {
     return match[1].trim();
   }
   return '';
 }
 
-// Helper to format full date & time (e.g. "May 29, 2026" + time -> "2026-05-29 01:31")
-function formatFullDateTime(dateStr, createdAt) {
+// Helper to format full date & time (e.g. "2026-07-29T02:36:22.181Z" -> "2026-07-29 02:36")
+function formatFullDateTime(createdAt) {
+  if (!createdAt) return '';
   try {
-    let year = 2026, month = '05', day = '29', hours = '00', mins = '00';
-
-    if (createdAt) {
-      const d = new Date(createdAt);
-      if (!isNaN(d.getTime())) {
-        year = d.getFullYear();
-        month = String(d.getMonth() + 1).padStart(2, '0');
-        day = String(d.getDate()).padStart(2, '0');
-        hours = String(d.getHours()).padStart(2, '0');
-        mins = String(d.getMinutes()).padStart(2, '0');
-      }
+    const d = new Date(createdAt);
+    if (!isNaN(d.getTime())) {
+      const year = d.getFullYear();
+      const month = String(d.getMonth() + 1).padStart(2, '0');
+      const day = String(d.getDate()).padStart(2, '0');
+      const hours = String(d.getHours()).padStart(2, '0');
+      const mins = String(d.getMinutes()).padStart(2, '0');
+      return `${year}-${month}-${day} ${hours}:${mins}`;
     }
-
-    if (dateStr) {
-      const dDate = new Date(dateStr);
-      if (!isNaN(dDate.getTime())) {
-        year = dDate.getFullYear();
-        month = String(dDate.getMonth() + 1).padStart(2, '0');
-        day = String(dDate.getDate()).padStart(2, '0');
-      }
-    }
-
-    return `${year}-${month}-${day} ${hours}:${mins}`;
   } catch (e) {}
-  return dateStr || createdAt || '';
+  return createdAt;
 }
 
 // Helper to auto-match product group based on title & SKU keywords
@@ -60,7 +47,7 @@ function autoMatchGroup(title = '', sku = '') {
   if (text.includes('stole')) return 'Stole';
   if (text.includes('2 layer') && (text.includes('square') || text.includes('4'))) return '2 layer Wooden 4';
   if (text.includes('2 layer')) return '2 layer Wooden 2';
-  if (text.includes('1 layer') || text.includes('wooden sign') || text.includes('wood sign')) return '1 layer wooden';
+  if (text.includes('1 layer') || text.includes('wooden sign') || text.includes('wood sign') || text.includes('door hanger')) return '1 layer wooden';
   if (text.includes('acrylic suncatcher') || text.includes('1 layer suncatcher')) return 'Arylic Suncatcher';
   return 'Stained Glass Suncatcher';
 }
@@ -77,20 +64,19 @@ export default async function handler(req, res) {
 
   try {
     if (req.method === 'GET') {
-      // Query ALL real live orders from PostgreSQL order_info & product tables without omitting any details
+      // Query ALL 11,553 real live orders from public."order" master table
       const queryRes = await pool.query(`
         SELECT DISTINCT ON (o.id)
           o.id,
-          o."orderId" as order_number,
-          o."orderDate" as order_date,
+          o."orderCode" as order_number,
           o."createdAt" as created_at,
-          o."shopName" as store_name,
-          o."buyerName" as customer_name,
-          o."buyerEmail" as customer_email,
-          o."giftMessage" as gift_message,
-          COALESCE(p.name, o.title) as product_title,
-          COALESCE(p.quantity, o.quantity::integer, 1) as quantity,
-          COALESCE(p.sku, o.skus) as sku,
+          o."updatedAt" as updated_at,
+          o."customerName" as customer_name,
+          o."customerNote" as customer_note,
+          o.note as order_note,
+          COALESCE(p.name, '') as product_title,
+          COALESCE(p.quantity, 1) as quantity,
+          COALESCE(p.sku, '') as sku,
           p.personalization as personalization_raw,
           p.description as description_raw,
           p.mockup_note as product_mockup_note,
@@ -104,24 +90,24 @@ export default async function handler(req, res) {
           q.ratio_status,
           q.ai_status,
           q.ai_score,
-          q.status,
-          d.drive_link,
+          q.status as qc_status,
+          COALESCE(o.drive_link, d.drive_link, '') as drive_link,
           s.text as sku_note
-        FROM public.order_info o
+        FROM public."order" o
         LEFT JOIN public.product p ON p."orderId" = o.id
         LEFT JOIN public.qc_orders q ON q.id = ('pg-' || o.id::text)
         LEFT JOIN (
           SELECT sku, MAX(drive_link) as drive_link FROM public.design_file GROUP BY sku
-        ) d ON d.sku = COALESCE(p.sku, o.skus)
+        ) d ON d.sku = p.sku
         LEFT JOIN (
           SELECT sku, MAX(text) as text FROM public.sku_note GROUP BY sku
-        ) s ON s.sku = COALESCE(p.sku, o.skus)
+        ) s ON s.sku = p.sku
         ORDER BY o.id DESC
       `);
 
       const orders = queryRes.rows.map(row => {
         const parsedSize = parseSize(row.description_raw, row.personalization_raw);
-        const fullDateTime = formatFullDateTime(row.order_date, row.created_at);
+        const fullDateTime = formatFullDateTime(row.created_at);
 
         // Build comprehensive personalization text combining all non-empty customer request fields
         const personalizationParts = [];
@@ -131,11 +117,11 @@ export default async function handler(req, res) {
         if (row.description_raw && row.description_raw.trim()) {
           personalizationParts.push(`Options: ${row.description_raw.trim()}`);
         }
-        if (row.gift_message && row.gift_message.trim()) {
-          personalizationParts.push(`Gift Message: ${row.gift_message.trim()}`);
+        if (row.customer_note && row.customer_note.trim()) {
+          personalizationParts.push(`Customer Note: ${row.customer_note.trim()}`);
         }
         if (row.product_mockup_note && row.product_mockup_note.trim()) {
-          personalizationParts.push(`Note: ${row.product_mockup_note.trim()}`);
+          personalizationParts.push(`Product Note: ${row.product_mockup_note.trim()}`);
         }
 
         const combinedPersonalizationText = personalizationParts.join('\n---\n');
@@ -144,9 +130,9 @@ export default async function handler(req, res) {
         return {
           id: `pg-${row.id}`,
           orderDate: fullDateTime,
-          storeName: row.store_name || 'Etsy Shop',
+          storeName: 'Etsy Shop',
           customerName: row.customer_name || '',
-          customerEmail: row.customer_email || '',
+          customerEmail: '',
           storeIcon: 'Etsy',
           orderNumber: row.order_number || `#${row.id}`,
           productTitle: row.product_title || '',
@@ -157,7 +143,7 @@ export default async function handler(req, res) {
             size: parsedSize,
             text: combinedPersonalizationText || 'Yêu cầu khách không ghi'
           },
-          note: row.product_mockup_note || row.gift_message || '-',
+          note: row.product_mockup_note || row.customer_note || row.order_note || '-',
           skuNote: row.sku_note || '-',
           driveLink: row.drive_link || '',
           hasUploadedDesign: row.has_uploaded_design || false,
@@ -172,7 +158,7 @@ export default async function handler(req, res) {
           ratioStatus: row.ratio_status || 'NEEDS_CHECK',
           aiStatus: row.ai_status || 'NEEDS_SCAN',
           aiScore: row.ai_score || null,
-          status: row.status || 'Chờ kiểm tra',
+          status: row.qc_status || 'Chờ kiểm tra',
           mockupThumb: row.mockup_thumb || '/_4123920413.png',
           assignee: 'Dakuho (QC SP)'
         };
