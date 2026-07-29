@@ -241,6 +241,8 @@ export default function App() {
       designHeight: null,
       designAspectRatio: null,
       ratioStatus: 'NEEDS_CHECK',
+      aiStatus: 'NEEDS_SCAN',
+      aiScore: null,
       status: 'Chờ kiểm tra'
     };
 
