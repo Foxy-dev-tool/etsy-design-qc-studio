@@ -74,6 +74,25 @@ const extractOrderSize = (order) => {
   return '';
 };
 
+// Clean customer text by removing redundant size lines already shown in the size badge
+const cleanPersonalizationText = (rawText) => {
+  if (!rawText || !rawText.trim()) return '';
+  
+  const lines = rawText.split('\n');
+  const filtered = lines.filter(line => {
+    const trimmed = line.trim();
+    if (!trimmed) return false;
+    
+    // Remove lines that explicitly state size (e.g. "Size: 6 in", "Select Size: 6 in", "Kích thước: 6 in")
+    if (trimmed.match(/^(?:Khách đặt Size|Select Size|Size|size|Kích thước|Dimensions)\s*[:=]/i)) {
+      return false;
+    }
+    return true;
+  });
+
+  return filtered.join('\n').trim();
+};
+
 // Safe Zone template matcher by size text or closest aspect ratio
 const getMatchedTemplateForGroup = (group, orderSizeText = '') => {
   if (!group || !Array.isArray(group.templates) || group.templates.length === 0) {
@@ -130,7 +149,6 @@ export default function OrderListTable({
   selectedOrders = [],
   onToggleSelectAll,
   onToggleSelectOrder,
-  onImportCSV,
   onGroupChange
 }) {
   const [searchQuery, setSearchQuery] = useState('');
@@ -247,25 +265,9 @@ export default function OrderListTable({
 
         </div>
 
-        {/* Right Action Tools: Column Customizer & Import CSV */}
+        {/* Right Action Tools: Column Customizer */}
         <div className="flex items-center gap-2">
           
-          <label className="px-3 py-1.5 rounded-lg bg-slate-100 hover:bg-slate-200 text-slate-700 border border-slate-300 font-bold text-xs flex items-center gap-1.5 cursor-pointer transition active:scale-95">
-            <Upload className="w-3.5 h-3.5 text-orange-600" />
-            <span>Upload CSV</span>
-            <input
-              type="file"
-              accept=".csv"
-              multiple
-              className="hidden"
-              onChange={(e) => {
-                if (e.target.files && e.target.files.length > 0 && onImportCSV) {
-                  onImportCSV(Array.from(e.target.files));
-                }
-              }}
-            />
-          </label>
-
           {/* Column Toggle Menu */}
           <div className="relative">
             <button
@@ -346,6 +348,7 @@ export default function OrderListTable({
                   const isSelected = selectedOrders.includes(order.id);
                   const rawText = order.personalization?.text || '';
                   const detectedSize = extractOrderSize(order);
+                  const cleanText = cleanPersonalizationText(rawText);
                   const cleanNote = formatNoteDisplay(order.note);
 
                   // Fail-proof group & template retrieval
@@ -403,7 +406,7 @@ export default function OrderListTable({
                         </td>
                       )}
 
-                      {/* 4. Product Title & Personalization (Exact badge matching photo request!) */}
+                      {/* 4. Product Title & Personalization */}
                       {isColVisible('product') && (
                         <td className="p-3 align-top">
                           <div className="flex items-start gap-3">
@@ -441,9 +444,9 @@ export default function OrderListTable({
                                   </div>
                                 )}
 
-                                {rawText && (
+                                {cleanText && (
                                   <button
-                                    onClick={() => copyToClipboard(rawText, `pers-${order.id}`)}
+                                    onClick={() => copyToClipboard(cleanText, `pers-${order.id}`)}
                                     className="px-2.5 py-1 rounded-lg bg-slate-100 hover:bg-slate-200 text-slate-700 border border-slate-300 font-bold text-xs flex items-center gap-1 cursor-pointer transition active:scale-95 shadow-2xs"
                                     title="Sao chép toàn bộ Yêu cầu khách"
                                   >
@@ -462,10 +465,10 @@ export default function OrderListTable({
                                 )}
                               </div>
 
-                              {/* Customer Personalization Text Box */}
-                              {rawText && (
+                              {/* Cleaned Customer Personalization Text Box (Without redundant size lines) */}
+                              {cleanText && (
                                 <div className="p-3 rounded-xl bg-blue-50/80 border border-blue-200/80 text-slate-900 font-sans text-xs font-semibold whitespace-pre-wrap leading-relaxed shadow-2xs break-words tracking-normal">
-                                  {rawText}
+                                  {cleanText}
                                 </div>
                               )}
 

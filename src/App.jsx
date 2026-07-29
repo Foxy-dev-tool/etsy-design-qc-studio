@@ -251,14 +251,6 @@ export default function App() {
     }
   };
 
-  // Dynamic CSV import handler
-  const handleImportCSVFiles = (fileList) => {
-    setCsvNotifyMsg(`Đã nhận ${fileList.length} file CSV dữ liệu thật. Đang đồng bộ tự động vào hệ thống...`);
-    setTimeout(() => {
-      setCsvNotifyMsg(`✅ Cập nhật thành công ${orders.length.toLocaleString()} đơn hàng từ PostgreSQL!`);
-      setTimeout(() => setCsvNotifyMsg(''), 4000);
-    }, 1000);
-  };
 
   // Run AI Vision & OCR Scan on order
   const handleRunAIScan = async (targetOrder, customPrompt = '') => {
@@ -378,7 +370,6 @@ export default function App() {
             selectedOrders={selectedOrders}
             onToggleSelectAll={handleToggleSelectAll}
             onToggleSelectOrder={handleToggleSelectOrder}
-            onImportCSV={handleImportCSVFiles}
           />
         )}
 

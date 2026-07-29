@@ -48,7 +48,7 @@ export default function Header({
                   </span>
                 </div>
                 <p className="text-[11px] text-slate-400 mt-0.5 font-medium">
-                  Hệ thống Quản lý & Kiểm Tra QC Tự Động • <span className="text-emerald-400 font-bold">12,655 Đơn Hàng CSV</span>
+                  Hệ thống Quản lý & Kiểm Tra QC Tự Động • <span className="text-emerald-400 font-bold">PostgreSQL Real-time Database</span>
                 </p>
               </div>
             </div>
@@ -69,7 +69,7 @@ export default function Header({
           <div className="hidden lg:flex items-center gap-3 text-xs">
             <div className="flex items-center gap-2 bg-slate-800/60 px-3 py-1.5 rounded-xl border border-slate-700/60">
               <div className="w-2 h-2 rounded-full bg-slate-400 animate-pulse" />
-              <span className="text-slate-400 font-medium">Tổng đơn CSV:</span>
+              <span className="text-slate-400 font-medium">Tổng đơn hàng:</span>
               <strong className="text-white font-extrabold text-sm">{totalOrders.toLocaleString()}</strong>
             </div>
 
