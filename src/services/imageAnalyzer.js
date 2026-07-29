@@ -84,35 +84,59 @@ export const validateAspectRatio = (actualWidth, actualHeight, targetWidth, targ
 };
 
 /**
- * Fuzzy Text Similarity Matcher (Levenshtein & Keyword Intersection)
+ * Strict Keyword & Word Matching Engine
  */
 export const compareTexts = (targetText, scannedText) => {
-  if (!targetText || !scannedText) return { match: false, score: 0 };
-  
-  const cleanTarget = targetText.toLowerCase().replace(/[^a-z0-9\s]/g, ' ').trim();
-  const cleanScanned = scannedText.toLowerCase().replace(/[^a-z0-9\s]/g, ' ').trim();
+  if (!targetText || !scannedText) return { match: false, score: 0, missingWords: [], foundWords: [] };
 
-  if (!cleanTarget) return { match: true, score: 100 };
+  // Strip system labels like "Size:", "Style:", "Personalization:", etc.
+  const cleanTarget = targetText
+    .replace(/(?:Size\s*(?:\([^)]*\))?|Style|Personalization|Dimensions|Select Size|Khách đặt Size)\s*[:=]/gi, '')
+    .toLowerCase()
+    .replace(/[^a-z0-9\s]/g, ' ')
+    .trim();
 
-  const targetWords = cleanTarget.split(/\s+/).filter(w => w.length > 1);
-  if (targetWords.length === 0) return { match: true, score: 100 };
+  const cleanScanned = scannedText
+    .toLowerCase()
+    .replace(/[^a-z0-9\s]/g, ' ')
+    .trim();
 
-  let foundCount = 0;
+  if (!cleanTarget) return { match: true, score: 100, missingWords: [], foundWords: [] };
+
+  // Filter out irrelevant words like "inches", "size", "style", "1-", "2-"
+  const stopWords = new Set(['inch', 'inches', 'style', 'size', 'personalization', 'heart', 'options', 'background']);
+  const targetWords = cleanTarget
+    .split(/\s+/)
+    .filter(w => w.length > 1 && !stopWords.has(w) && isNaN(w));
+
+  if (targetWords.length === 0) return { match: true, score: 100, missingWords: [], foundWords: [] };
+
+  const foundWords = [];
+  const missingWords = [];
+
   for (const word of targetWords) {
     if (cleanScanned.includes(word)) {
-      foundCount++;
+      foundWords.push(word);
+    } else {
+      missingWords.push(word);
     }
   }
 
-  const score = Math.round((foundCount / targetWords.length) * 100);
+  const score = Math.round((foundWords.length / targetWords.length) * 100);
+
+  // Strict match requires at least 85% of key words (e.g. names) to be found in OCR
+  const match = score >= 85 && missingWords.length === 0;
+
   return {
-    match: score >= 60,
-    score
+    match,
+    score,
+    foundWords,
+    missingWords
   };
 };
 
 /**
- * REAL Offline OCR & Computer Vision Engine using Tesseract.js (No Cloud AI Required!)
+ * REAL Offline OCR & Computer Vision Engine using Tesseract.js (Strict & Honest Verification)
  */
 export const runAIScanSimulated = async (order, designImageUrl, aiCustomPrompt = '') => {
   const targetText = order.personalization?.text || '';
@@ -124,57 +148,61 @@ export const runAIScanSimulated = async (order, designImageUrl, aiCustomPrompt =
     const ret = await worker.recognize(imageToScan);
     await worker.terminate();
 
-    const ocrText = ret.data.text ? ret.data.text.trim() : '';
-    const lines = ocrText.split('\n').map(l => l.trim()).filter(Boolean);
-    const confidence = Math.round(ret.data.confidence || 90);
+    const rawOcrText = ret.data.text ? ret.data.text.trim() : '';
+    const ocrLines = rawOcrText.split('\n').map(l => l.trim()).filter(Boolean);
+    const confidence = Math.round(ret.data.confidence || 0);
 
-    // 2. Perform Fuzzy Keyword Matching
-    const comparison = compareTexts(targetText, ocrText);
+    // 2. Perform Strict Text Comparison
+    const comparison = compareTexts(targetText, rawOcrText);
 
-    // 3. Fallback for sample demo images if OCR returns low text density due to artistic cursive fonts
-    let finalDetectedLines = lines;
-    let finalScore = Math.max(confidence, comparison.score);
-    let isTextMatch = comparison.match;
+    // 3. Honest Evaluation: NO Fake 95% Fallback!
+    let isTextMatch = false;
+    let confidenceScore = 0;
+    let detailsMsg = '';
+    let suggestionMsg = '';
 
-    if (finalDetectedLines.length === 0 || finalScore < 50) {
-      // Smart extracted keywords fallback
-      const keywords = targetText.split('\n').map(l => l.trim()).filter(Boolean);
-      finalDetectedLines = keywords.length > 0 ? keywords : ['Đã đối chiếu khung thiết kế & Safe Zone'];
-      finalScore = 95;
+    if (ocrLines.length === 0) {
+      isTextMatch = false;
+      confidenceScore = 0;
+      detailsMsg = `⚠️ Không tự động quét được chữ từ ảnh (do font chữ uốn lượn/nghệ thuật/ảnh tối màu). QC cần đối chiếu thủ công với yêu cầu khách đặt.`;
+      suggestionMsg = '⚠️ OCR không đọc được chữ uốn lượn trên ảnh. QC cần đối chiếu tên/chữ cá nhân hóa thủ công trước khi duyệt in!';
+    } else if (comparison.match) {
       isTextMatch = true;
+      confidenceScore = Math.max(confidence, comparison.score);
+      detailsMsg = `✅ Tự động quét OCR thành công! Tìm thấy đầy đủ từ khóa chữ cá nhân hóa từ ảnh khớp với yêu cầu khách.`;
+      suggestionMsg = '✅ Thiết kế hoàn toàn chính xác! OCR đã tự động đọc và đối chiếu duyệt cho khâu in ấn.';
+    } else {
+      isTextMatch = false;
+      confidenceScore = comparison.score;
+      const missingInfo = comparison.missingWords.length > 0 ? ` [Thiếu/sai các từ: ${comparison.missingWords.slice(0, 5).join(', ')}]` : '';
+      detailsMsg = `❌ CẢNH BÁO SAI CHỮ CÁ NHÂN HÓA! Chữ quét được trên ảnh ("${ocrLines.join(' ')}") KHÔNG KHỚP với yêu cầu khách đặt${missingInfo}.`;
+      suggestionMsg = `❌ PHÁT HIỆN SAI CHỮ CÁ NHÂN HÓA! Chữ trên ảnh bị thiếu hoặc sai từ: ${comparison.missingWords.length > 0 ? comparison.missingWords.join(', ') : 'Chữ trên ảnh không khớp'}. QC tuyệt đối KHÔNG duyệt in đơn này!`;
     }
 
     return {
-      confidence: finalScore,
+      confidence: confidenceScore,
       status: isTextMatch ? 'MATCH' : 'TEXT_MISMATCH',
-      detectedText: finalDetectedLines,
+      detectedText: ocrLines.length > 0 ? ocrLines : ['(Không quét được chữ từ ảnh - Font nghệ thuật/Cursive)'],
       textMatch: isTextMatch,
-      textMatchDetails: isTextMatch 
-        ? `Tự động quét OCR thành công! Tìm thấy văn bản trùng khớp với yêu cầu: "${targetText.slice(0, 80)}..."` 
-        : `CẢNH BÁO: Văn bản quét được trên ảnh khác biệt so với yêu cầu khách đặt "${targetText.slice(0, 50)}..."`,
+      textMatchDetails: detailsMsg,
       ratioCheckPassed: order.ratioStatus === 'MATCH',
       bleedPassed: true,
       colorsDetected: ['#1E293B (Đen)', '#F59E0B (Vàng hổ phách)', '#10B981 (Xanh lá)'],
-      suggestion: isTextMatch 
-        ? '✅ Thiết kế hoàn toàn chính xác! OCR đã tự động đọc và duyệt cho khâu in ấn.'
-        : '⚠️ Phát hiện nghi vấn sai chữ! Đề nghị QC kiểm tra lại tác phẩm thủ công trước khi duyệt.'
+      suggestion: suggestionMsg
     };
 
   } catch (err) {
-    console.warn('Tesseract OCR fallback to local vision matcher:', err);
-
-    // Reliable Local Fallback
-    const keywords = targetText.split('\n').map(l => l.trim()).filter(Boolean);
+    console.warn('Tesseract OCR Error:', err);
     return {
-      confidence: 96,
-      status: 'MATCH',
-      detectedText: keywords.length > 0 ? keywords : ['Đã đối chiếu văn bản cá nhân hóa'],
-      textMatch: true,
-      textMatchDetails: `Đã đối chiếu tự động với yêu cầu khách đặt: "${targetText.slice(0, 60)}..."`,
-      ratioCheckPassed: true,
+      confidence: 0,
+      status: 'TEXT_MISMATCH',
+      detectedText: ['(Lỗi nhận diện OCR - Cần QC đối chiếu thủ công)'],
+      textMatch: false,
+      textMatchDetails: `⚠️ Không thể quét tự động. Đề nghị QC đối chiếu nội dung chữ thủ công.`,
+      ratioCheckPassed: false,
       bleedPassed: true,
-      colorsDetected: ['#1E293B', '#F59E0B'],
-      suggestion: '✅ Thiết kế đạt yêu cầu. Đã hoàn thành kiểm tra tự động.'
+      colorsDetected: ['#1E293B'],
+      suggestion: '⚠️ Không thể quét tự động. Đề nghị QC kiểm tra mắt thường!'
     };
   }
 };
