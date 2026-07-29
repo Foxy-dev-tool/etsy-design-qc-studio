@@ -111,7 +111,7 @@ export default function OrderListTable({
     { id: 'product', label: 'Sản phẩm & Yêu Cầu Khách', visible: true },
     { id: 'productGroupSelect', label: 'Chọn Nhóm SP Safe Zone & Quét QC', visible: true },
     { id: 'aiCheck', label: 'AI Quét OCR', visible: true },
-    { id: 'note', label: 'Ghi Chú', visible: true },
+    { id: 'note', label: 'Ghi Chú', visible: false },
     { id: 'uploadDesign', label: 'File Ảnh Thiết Kế', visible: true },
     { id: 'previewAction', label: 'Nút Preview', visible: true },
     { id: 'status', label: 'Trạng Thái QC', visible: true }
