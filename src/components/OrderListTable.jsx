@@ -5,36 +5,32 @@ import {
   Sparkles, 
   CheckCircle2, 
   AlertTriangle, 
-  FileSpreadsheet, 
+  XCircle, 
   Search, 
   Filter, 
-  Layers,
-  Zap,
-  ExternalLink,
+  Columns, 
+  AlertCircle,
   ChevronLeft,
   ChevronRight,
+  Database,
   Copy,
-  Check,
-  XCircle,
-  AlertCircle,
-  FileCode,
-  Image as ImageIcon,
-  HelpCircle,
-  Columns,
-  Maximize2,
-  Trash2,
-  Database
+  Layers,
+  Zap,
+  Trash2
 } from 'lucide-react';
+import { DEFAULT_COLUMNS } from '../services/mockData';
 
-// Helper to format SKU / Note display safely
-const formatNoteDisplay = (str) => {
-  if (!str || str === '-') return '-';
-  if (typeof str === 'string' && str.trim().startsWith('[')) {
+// Frontend helper to parse JSON array notes
+const formatNoteDisplay = (rawNote) => {
+  if (!rawNote || rawNote === 'nan' || rawNote === 'None' || rawNote === '-') return '-';
+  const str = String(rawNote).trim();
+  
+  if (str.startsWith('[') && str.endsWith(']')) {
     try {
       const parsed = JSON.parse(str);
       if (Array.isArray(parsed)) {
         const texts = parsed
-          .map(item => (typeof item === 'object' && item && item.text) ? String(item.text).trim() : String(item).trim())
+          .map(item => (typeof item === 'object' && item.text) ? String(item.text).trim() : String(item).trim())
           .filter(Boolean);
         if (texts.length > 0) return texts.join(' • ');
       }
@@ -42,70 +38,52 @@ const formatNoteDisplay = (str) => {
       // ignore
     }
   }
-  return String(str);
+  return str;
 };
 
-// Helper to format date line 1 and time line 2
-const formatDateAndTime = (dateStr) => {
-  if (!dateStr || dateStr === 'nan') return { datePart: '-', timePart: '' };
-  const parts = String(dateStr).trim().split(' ');
-  if (parts.length >= 2) {
-    return { datePart: parts[0], timePart: parts[1] };
-  }
-  return { datePart: String(dateStr), timePart: '' };
-};
-
-// Dynamic client-side size parser from personalization text
-const parseSizeFromText = (fullText = '') => {
-  if (!fullText || !fullText.trim()) return '';
-
-  // 1. Line starting with Size: / size: / Kích thước: / Dimensions:
-  const lineMatch = fullText.match(/(?:Size|size|Kích thước|Dimensions)\s*[:=]\s*([^\n\r,]+)/i);
-  if (lineMatch && lineMatch[1] && lineMatch[1].trim()) {
-    const candidate = lineMatch[1].trim();
-    if (!candidate.toLowerCase().startsWith('1 layer') && !candidate.toLowerCase().startsWith('2 layer')) {
-      return candidate;
-    }
-  }
-
-  // 2. Explicit dimension patterns e.g. 8x8, 8×8, 60" x 50", 10x10, 3.94 in, 12in-18in
-  const dimMatch = fullText.match(/(\d+(?:\.\d+)?\s*(?:in|inch|inches|cm|X\d+|\d+\s*["″]?\s*[x×*]\s*\d+["″]?|\d+in-\d+in))/i);
-  if (dimMatch && dimMatch[1] && dimMatch[1].trim()) {
-    return dimMatch[1].trim();
-  }
-
-  // 3. Clothing size e.g. 2XL, XL, Small, Medium, Large
-  const clothingMatch = fullText.match(/\b(XS|S|M|L|XL|2XL|3XL|4XL|5XL|Small|Medium|Large|X-Large|2X-Large|3X-Large)\b/i);
-  if (clothingMatch && clothingMatch[1] && clothingMatch[1].trim()) {
-    return clothingMatch[1].trim();
-  }
-
-  return '';
-};
-
-// Fail-proof template matcher
+// Safe Zone template matcher by size text or closest aspect ratio
 const getMatchedTemplateForGroup = (group, orderSizeText = '') => {
-  const defaultFallback = { sizeLabel: 'Standard', widthPx: 3012, heightPx: 3012, tmplFile: '/_4123920413.png' };
   if (!group || !Array.isArray(group.templates) || group.templates.length === 0) {
-    return defaultFallback;
+    return { sizeLabel: 'Standard', widthPx: 3012, heightPx: 3012, templateImage: '/_4123920413.png' };
   }
 
-  const safeSizeText = (orderSizeText || '').toString().toLowerCase().replace(',', '.');
-  if (!safeSizeText) {
-    return group.templates[0] || defaultFallback;
+  if (!orderSizeText) {
+    return group.templates[0];
   }
 
-  // Exact / partial size match
+  const searchText = orderSizeText.toLowerCase().replace(',', '.');
+
+  // Try exact size match first
   for (const tmpl of group.templates) {
-    if (tmpl && tmpl.sizeLabel) {
-      const tmplSize = tmpl.sizeLabel.toString().toLowerCase().replace(',', '.');
-      if (safeSizeText.includes(tmplSize)) {
-        return tmpl;
-      }
+    const tmplSize = tmpl.sizeLabel.toLowerCase().replace(',', '.');
+    if (searchText.includes(tmplSize)) {
+      return tmpl;
     }
   }
 
-  return group.templates[0] || defaultFallback;
+  // Group specific matching
+  if (group.name === 'Stained Glass Suncatcher') {
+    if (searchText.includes('9.84')) return group.templates[3];
+    if (searchText.includes('7.87')) return group.templates[2];
+    if (searchText.includes('5.9')) return group.templates[1];
+    if (searchText.includes('3.94')) return group.templates[0];
+  } else if (group.name === 'Arylic Suncatcher') {
+    if (searchText.includes('12')) return group.templates[1];
+    if (searchText.includes('3.54')) return group.templates[0];
+  } else if (group.name === 'Graduation Cap') {
+    if (searchText.includes('9.5')) return group.templates[1];
+    if (searchText.includes('7.5')) return group.templates[0];
+  } else if (group.name === 'Desk Mat') {
+    if (searchText.includes('90x40') || searchText.includes('90*40')) return group.templates[6];
+    if (searchText.includes('80x30') || searchText.includes('80*30')) return group.templates[5];
+    if (searchText.includes('70x35') || searchText.includes('70*35')) return group.templates[4];
+    if (searchText.includes('60x30') || searchText.includes('60*30')) return group.templates[3];
+    if (searchText.includes('45x40') || searchText.includes('45*40')) return group.templates[2];
+    if (searchText.includes('30x25') || searchText.includes('30*25')) return group.templates[1];
+    if (searchText.includes('18x22') || searchText.includes('18*22')) return group.templates[0];
+  }
+
+  return group.templates[0];
 };
 
 export default function OrderListTable({
@@ -116,53 +94,31 @@ export default function OrderListTable({
   onUploadDesign,
   onDeleteDesign,
   onRunQCScan,
-  onGroupChange,
   selectedOrders = [],
   onToggleSelectAll,
   onToggleSelectOrder,
-  onImportCSV
+  onImportCSV,
+  onGroupChange
 }) {
-  const [searchTerm, setSearchTerm] = useState('');
+  const [searchQuery, setSearchQuery] = useState('');
   const [filterRatio, setFilterRatio] = useState('ALL');
   const [filterStatus, setFilterStatus] = useState('ALL');
-  
-  // Pagination State
-  const [currentPage, setCurrentPage] = useState(1);
-  const [pageSize, setPageSize] = useState(20);
-
-  // Column Visibility Customizer state
-  const [showColMenu, setShowColMenu] = useState(false);
-  const [columns, setColumns] = useState([
-    { id: 'select', label: 'Select Checkbox', visible: true },
-    { id: 'date', label: 'Ngày & Giờ', visible: true },
-    { id: 'orderId', label: 'ID Đơn Hàng', visible: true },
-    { id: 'product', label: 'Sản phẩm & Yêu Cầu Khách', visible: true },
-    { id: 'productGroupSelect', label: 'Chọn Nhóm SP Safe Zone & Quét QC', visible: true },
-    { id: 'aiCheck', label: 'AI Quét OCR', visible: true },
-    { id: 'note', label: 'Ghi Chú', visible: false },
-    { id: 'uploadDesign', label: 'File Ảnh Thiết Kế', visible: true },
-    { id: 'previewAction', label: 'Nút Preview', visible: true },
-    { id: 'status', label: 'Trạng Thái QC', visible: true }
-  ]);
-
+  const [columns, setColumns] = useState(DEFAULT_COLUMNS);
+  const [showColumnPicker, setShowColumnPicker] = useState(false);
   const [copiedTextId, setCopiedTextId] = useState(null);
 
-  const safeOrders = Array.isArray(orders) ? orders : [];
-  const safeGroups = Array.isArray(productGroups) && productGroups.length > 0 ? productGroups : [
-    { id: '1', name: 'Stained Glass Suncatcher', tolerancePercent: 1.5, templates: [] }
-  ];
+  // Pagination
+  const [currentPage, setCurrentPage] = useState(1);
+  const [pageSize, setPageSize] = useState(50);
 
-  // Filter Logic
-  const filteredOrders = safeOrders.filter(order => {
-    if (!order) return false;
-    const term = searchTerm.toLowerCase();
+  // Filter logic across all orders
+  const filteredOrders = orders.filter(order => {
     const matchesSearch = 
-      !term ||
-      (order.orderNumber && String(order.orderNumber).toLowerCase().includes(term)) ||
-      (order.customerName && String(order.customerName).toLowerCase().includes(term)) ||
-      (order.sku && String(order.sku).toLowerCase().includes(term)) ||
-      (order.productTitle && String(order.productTitle).toLowerCase().includes(term)) ||
-      (order.personalization?.text && String(order.personalization.text).toLowerCase().includes(term));
+      order.orderNumber.toLowerCase().includes(searchQuery.toLowerCase()) ||
+      order.productTitle.toLowerCase().includes(searchQuery.toLowerCase()) ||
+      order.sku.toLowerCase().includes(searchQuery.toLowerCase()) ||
+      (order.personalization?.text || '').toLowerCase().includes(searchQuery.toLowerCase()) ||
+      (order.note || '').toLowerCase().includes(searchQuery.toLowerCase());
 
     const matchesRatio = filterRatio === 'ALL' || order.ratioStatus === filterRatio;
     const matchesStatus = filterStatus === 'ALL' || order.status === filterStatus;
@@ -185,11 +141,9 @@ export default function OrderListTable({
   };
 
   const copyToClipboard = (text, id) => {
-    if (text) {
-      navigator.clipboard.writeText(text);
-      setCopiedTextId(id);
-      setTimeout(() => setCopiedTextId(null), 2000);
-    }
+    navigator.clipboard.writeText(text);
+    setCopiedTextId(id);
+    setTimeout(() => setCopiedTextId(null), 2000);
   };
 
   return (
@@ -203,7 +157,7 @@ export default function OrderListTable({
           
           <div className="flex items-center gap-2 bg-orange-50 border border-orange-200 px-3 py-1.5 rounded-lg text-orange-800 font-extrabold text-xs shrink-0">
             <Database className="w-3.5 h-3.5 text-orange-600" />
-            <span>PostgreSQL: {safeOrders.length.toLocaleString()} Đơn Real-time</span>
+            <span>PostgreSQL: {orders.length.toLocaleString()} Đơn Real-time</span>
           </div>
 
           <div className="relative min-w-[240px] flex-1 max-w-md">
@@ -211,9 +165,9 @@ export default function OrderListTable({
             <input
               type="text"
               placeholder="Tìm Mã đơn (#4065973514), SKU, Tên, Chữ..."
-              value={searchTerm}
+              value={searchQuery}
               onChange={(e) => {
-                setSearchTerm(e.target.value);
+                setSearchQuery(e.target.value);
                 setCurrentPage(1);
               }}
               className="w-full pl-8 pr-3 py-1.5 bg-slate-50 border border-slate-200 rounded-lg text-xs font-bold text-slate-900 placeholder:text-slate-400 focus:outline-none focus:border-orange-500 focus:bg-white transition"
@@ -282,18 +236,18 @@ export default function OrderListTable({
           {/* Column Toggle Menu */}
           <div className="relative">
             <button
-              onClick={() => setShowColMenu(!showColMenu)}
+              onClick={() => setShowColumnPicker(!showColumnPicker)}
               className="px-3 py-1.5 rounded-lg bg-slate-100 hover:bg-slate-200 text-slate-700 border border-slate-300 font-bold text-xs flex items-center gap-1.5 transition active:scale-95 cursor-pointer"
             >
               <Columns className="w-3.5 h-3.5 text-slate-600" />
               <span>Tinh chỉnh Cột</span>
             </button>
 
-            {showColMenu && (
+            {showColumnPicker && (
               <div className="absolute right-0 top-full mt-1.5 w-60 bg-white border border-slate-200 rounded-xl shadow-xl p-3 z-50 space-y-1 text-xs">
                 <div className="flex items-center justify-between border-b pb-1.5 mb-1.5">
                   <span className="font-extrabold text-slate-800 text-[11px] uppercase tracking-wider">Ẩn / Hiện Cột</span>
-                  <button onClick={() => setShowColMenu(false)} className="text-slate-400 hover:text-slate-600 font-bold">✕</button>
+                  <button onClick={() => setShowColumnPicker(false)} className="text-slate-400 hover:text-slate-600 font-bold">✕</button>
                 </div>
                 {columns.map(col => (
                   <label key={col.id} className="flex items-center gap-2 hover:bg-slate-50 p-1.5 rounded cursor-pointer font-bold text-slate-700 text-xs">
@@ -358,20 +312,15 @@ export default function OrderListTable({
 
                   const isSelected = selectedOrders.includes(order.id);
                   const rawText = order.personalization?.text || '';
-                  
-                  // Accurate size recognition from order.personalization.size or rawText
-                  const detectedSize = (order.personalization?.size && String(order.personalization.size).trim()) || parseSizeFromText(rawText);
-                  const hasExplicitSizeInCustomerText = Boolean(detectedSize && detectedSize.trim() !== '');
-
+                  const hasExplicitSizeInCustomerText = Boolean(order.personalization?.size && String(order.personalization.size).trim() !== '');
                   const cleanNote = formatNoteDisplay(order.note);
-                  const { datePart, timePart } = formatDateAndTime(order.orderDate);
 
                   // Fail-proof group & template retrieval
                   const currentGroupName = order.productGroup || 'Stained Glass Suncatcher';
-                  const currentGroupObj = safeGroups.find(g => g && g.name === currentGroupName) || safeGroups[0];
+                  const currentGroupObj = productGroups.find(g => g && g.name === currentGroupName) || productGroups[0];
                   const matchedTmpl = getMatchedTemplateForGroup(
                     currentGroupObj, 
-                    detectedSize
+                    order.personalization?.size || ''
                   );
 
                   return (
@@ -396,12 +345,11 @@ export default function OrderListTable({
                       {/* 2. Ngày & Giờ */}
                       {isColVisible('date') && (
                         <td className="p-3 align-top text-center text-[11px] font-bold text-slate-700 whitespace-nowrap">
-                          <div>{datePart}</div>
-                          {timePart && <div className="text-[10px] text-slate-400 font-medium pt-0.5">{timePart}</div>}
+                          <div>{order.orderDate || '-'}</div>
                         </td>
                       )}
 
-                      {/* 3. ID Đơn hàng & Store */}
+                      {/* 3. ID Đơn hàng */}
                       {isColVisible('orderId') && (
                         <td className="p-3 align-top">
                           <div className="space-y-1">
@@ -415,20 +363,9 @@ export default function OrderListTable({
                                 className="text-slate-400 hover:text-orange-500 transition p-0.5"
                                 title="Copy mã đơn"
                               >
-                                {copiedTextId === order.id ? <Check className="w-3 h-3 text-emerald-600" /> : <Copy className="w-3 h-3" />}
+                                {copiedTextId === order.id ? <CheckCircle2 className="w-3 h-3 text-emerald-600" /> : <Copy className="w-3 h-3" />}
                               </button>
                             </div>
-                            {order.driveLink && (
-                              <a
-                                href={order.driveLink}
-                                target="_blank"
-                                rel="noreferrer"
-                                className="text-[10.5px] font-bold text-blue-600 hover:underline flex items-center gap-1 pt-0.5"
-                              >
-                                <ExternalLink className="w-3 h-3" />
-                                <span>Drive File</span>
-                              </a>
-                            )}
                           </div>
                         </td>
                       )}
@@ -458,7 +395,7 @@ export default function OrderListTable({
                                 </span>
                               </div>
 
-                              {/* Customer Personalization Text & Highlighted Size */}
+                              {/* Customer Personalization Text */}
                               <div className="space-y-1 pt-0.5">
                                 {!hasExplicitSizeInCustomerText && (
                                   <div className="p-1.5 rounded-lg bg-amber-50 border border-amber-200 text-amber-900 text-[11px] font-bold flex items-center gap-1.5">
@@ -479,7 +416,7 @@ export default function OrderListTable({
                         </td>
                       )}
 
-                      {/* 5. Dynamic Product Group Dropdown & Safe Zone Match */}
+                      {/* 5. Dynamic Product Group Dropdown */}
                       {isColVisible('productGroupSelect') && (
                         <td className="p-3 align-top">
                           <div className="space-y-2">
@@ -494,7 +431,7 @@ export default function OrderListTable({
                                 onChange={(e) => onGroupChange && onGroupChange(order.id, e.target.value)}
                                 className="w-full p-1.5 bg-slate-50 hover:bg-white border border-slate-300 rounded-lg text-xs font-bold text-slate-900 focus:outline-none focus:border-orange-500 cursor-pointer shadow-2xs transition"
                               >
-                                {safeGroups.map(group => (
+                                {productGroups.map(group => (
                                   <option key={group.id} value={group.name}>
                                     {group.name}
                                   </option>
@@ -551,10 +488,10 @@ export default function OrderListTable({
                             )}
 
                             <button
-                              onClick={() => onOpenAIScanner && onOpenAIScanner(order)}
-                              className="w-full py-1 px-2 rounded-lg bg-indigo-50 hover:bg-indigo-100 text-indigo-700 border border-indigo-200 font-extrabold text-[10.5px] flex items-center justify-center gap-1 transition cursor-pointer"
+                              onClick={() => onOpenAIScanner(order)}
+                              className="w-full py-1.5 px-2.5 rounded-lg bg-indigo-50 hover:bg-indigo-100 text-indigo-700 border border-indigo-200 font-bold text-xs flex items-center justify-center gap-1 transition"
                             >
-                              <Sparkles className="w-3 h-3 text-indigo-600" />
+                              <Sparkles className="w-3.5 h-3.5 text-indigo-600" />
                               <span>Quét AI</span>
                             </button>
                           </div>
@@ -589,34 +526,32 @@ export default function OrderListTable({
                               <span className="text-xs text-slate-400 italic block font-medium">Chưa có ảnh</span>
                             )}
 
-                            <div className="flex flex-col gap-1 w-full">
-                              <label className="px-2.5 py-1 rounded-lg bg-slate-100 hover:bg-slate-200 text-slate-800 border border-slate-300 font-bold text-xs flex items-center justify-center gap-1 cursor-pointer transition active:scale-95 shadow-2xs whitespace-nowrap">
-                                <Upload className="w-3.5 h-3.5 text-orange-600" />
-                                <span>{order.hasUploadedDesign ? 'Up Ảnh Khác' : 'Up Ảnh'}</span>
-                                <input
-                                  type="file"
-                                  accept="image/*"
-                                  className="hidden"
-                                  onChange={(e) => {
-                                    if (e.target.files && e.target.files[0] && onUploadDesign) {
-                                      onUploadDesign(order, e.target.files[0]);
-                                    }
-                                  }}
-                                />
-                              </label>
+                            <label className="px-2.5 py-1 rounded-lg bg-slate-100 hover:bg-slate-200 text-slate-800 border border-slate-300 font-bold text-xs flex items-center gap-1 cursor-pointer transition active:scale-95 shadow-2xs whitespace-nowrap">
+                              <Upload className="w-3.5 h-3.5 text-orange-600" />
+                              <span>{order.hasUploadedDesign ? 'Up Ảnh Khác' : 'Up Ảnh'}</span>
+                              <input
+                                type="file"
+                                accept="image/*"
+                                className="hidden"
+                                onChange={(e) => {
+                                  if (e.target.files && e.target.files[0]) {
+                                    onUploadDesign(order, e.target.files[0]);
+                                  }
+                                }}
+                              />
+                            </label>
 
-                              {/* XÓA ẢNH THIẾT KẾ BUTTON */}
-                              {order.hasUploadedDesign && (
-                                <button
-                                  onClick={() => onDeleteDesign && onDeleteDesign(order)}
-                                  className="px-2.5 py-1 rounded-lg bg-rose-50 hover:bg-rose-100 text-rose-700 border border-rose-200 font-bold text-xs flex items-center justify-center gap-1 cursor-pointer transition active:scale-95 shadow-2xs whitespace-nowrap"
-                                  title="Xóa ảnh thiết kế đã tải lên"
-                                >
-                                  <Trash2 className="w-3.5 h-3.5 text-rose-600" />
-                                  <span>Xóa Ảnh</span>
-                                </button>
-                              )}
-                            </div>
+                            {order.hasUploadedDesign && onDeleteDesign && (
+                              <button
+                                onClick={() => onDeleteDesign(order)}
+                                className="px-2.5 py-1 rounded-lg bg-rose-50 hover:bg-rose-100 text-rose-700 border border-rose-200 font-bold text-xs flex items-center justify-center gap-1 cursor-pointer transition active:scale-95 shadow-2xs whitespace-nowrap mt-1"
+                                title="Xóa ảnh thiết kế đã tải lên"
+                              >
+                                <Trash2 className="w-3.5 h-3.5 text-rose-600" />
+                                <span>Xóa Ảnh</span>
+                              </button>
+                            )}
+
                           </div>
                         </td>
                       )}
@@ -625,7 +560,7 @@ export default function OrderListTable({
                       {isColVisible('previewAction') && (
                         <td className="p-3 align-top text-center">
                           <button
-                            onClick={() => onOpenVisualInspector && onOpenVisualInspector(order)}
+                            onClick={() => onOpenVisualInspector(order)}
                             className="px-3 py-1.5 rounded-lg bg-orange-600 hover:bg-orange-700 text-white font-extrabold text-xs flex items-center justify-center gap-1 shadow-xs transition active:scale-95 mx-auto whitespace-nowrap"
                             title="Bấm nút Preview để xem khung sản phẩm khớp với thiết kế"
                           >
@@ -643,14 +578,14 @@ export default function OrderListTable({
                               <CheckCircle2 className="w-3.5 h-3.5 text-emerald-600" />
                               <span>Thành công</span>
                             </span>
-                          ) : order.status === 'Lỗi' || order.ratioStatus === 'MISMATCH' ? (
+                          ) : order.status === 'Lỗi' || order.status === 'Sai chữ AI' || order.ratioStatus === 'MISMATCH' ? (
                             <span className="px-3 py-1 rounded-full text-xs font-extrabold bg-rose-100 text-rose-800 border border-rose-300 inline-flex items-center gap-1 whitespace-nowrap shadow-2xs">
                               <AlertTriangle className="w-3.5 h-3.5 text-rose-600" />
-                              <span>Lỗi Tỷ Lệ</span>
+                              <span>Lỗi QC</span>
                             </span>
                           ) : (
-                            <span className="px-3 py-1 rounded-full text-xs font-bold bg-amber-100 text-amber-900 border border-amber-300 inline-flex items-center gap-1 whitespace-nowrap shadow-2xs">
-                              <span>Chờ kiểm tra</span>
+                            <span className="px-2.5 py-1 rounded-full text-xs font-bold bg-amber-50 text-amber-800 border border-amber-200 inline-block whitespace-nowrap">
+                              Chờ kiểm tra
                             </span>
                           )}
                         </td>
@@ -664,51 +599,53 @@ export default function OrderListTable({
           </table>
         </div>
 
-        {/* Footer Pagination Controls */}
-        <div className="p-3 bg-slate-50 border-t border-slate-200 flex flex-wrap items-center justify-between gap-3 text-xs">
-          
-          <div className="flex items-center gap-2 font-semibold text-slate-600">
-            <span>Hiển thị</span>
+        {/* Pagination Controls */}
+        <div className="flex flex-col sm:flex-row items-center justify-between gap-3 p-3 bg-slate-50 border-t border-slate-200 text-xs">
+          <div className="flex items-center gap-2 text-slate-600 font-medium">
+            <span>Hiển thị:</span>
             <select
               value={pageSize}
               onChange={(e) => {
                 setPageSize(Number(e.target.value));
                 setCurrentPage(1);
               }}
-              className="px-2 py-1 bg-white border border-slate-300 rounded font-bold text-slate-800 focus:outline-none"
+              className="bg-white border border-slate-200 rounded px-2 py-1 font-bold text-slate-800 focus:outline-none"
             >
-              <option value={10}>10 đơn/trang</option>
-              <option value={20}>20 đơn/trang</option>
-              <option value={50}>50 đơn/trang</option>
-              <option value={100}>100 đơn/trang</option>
+              <option value={20}>20 dòng</option>
+              <option value={50}>50 dòng</option>
+              <option value={100}>100 dòng</option>
+              <option value={250}>250 dòng</option>
             </select>
-            <span>trong tổng số <strong>{totalRecords.toLocaleString()}</strong> đơn</span>
+            <span>
+              | {startIndex + 1} - {Math.min(startIndex + pageSize, totalRecords)} trong tổng số <strong className="text-slate-900 font-extrabold">{totalRecords.toLocaleString()}</strong> đơn
+            </span>
           </div>
 
-          {/* Pagination Buttons */}
-          <div className="flex items-center gap-1">
+          <div className="flex items-center gap-1.5">
             <button
+              onClick={() => setCurrentPage(p => Math.max(1, p - 1))}
               disabled={currentPage === 1}
-              onClick={() => setCurrentPage(prev => Math.max(prev - 1, 1))}
-              className="p-1.5 rounded-lg bg-white border border-slate-300 text-slate-700 hover:bg-slate-100 disabled:opacity-40 disabled:cursor-not-allowed font-bold"
+              className="px-2.5 py-1 rounded bg-white border border-slate-200 text-slate-700 font-bold hover:bg-slate-100 disabled:opacity-40 transition flex items-center gap-1"
             >
-              <ChevronLeft className="w-4 h-4" />
+              <ChevronLeft className="w-3.5 h-3.5" />
+              <span>Trang trước</span>
             </button>
 
-            <span className="px-3 font-extrabold text-slate-800">
+            <span className="px-3 py-1 bg-white border border-slate-200 rounded font-bold text-orange-600">
               Trang {currentPage} / {totalPages}
             </span>
 
             <button
-              disabled={currentPage >= totalPages}
-              onClick={() => setCurrentPage(prev => Math.min(prev + 1, totalPages))}
-              className="p-1.5 rounded-lg bg-white border border-slate-300 text-slate-700 hover:bg-slate-100 disabled:opacity-40 disabled:cursor-not-allowed font-bold"
+              onClick={() => setCurrentPage(p => Math.min(totalPages, p + 1))}
+              disabled={currentPage === totalPages}
+              className="px-2.5 py-1 rounded bg-white border border-slate-200 text-slate-700 font-bold hover:bg-slate-100 disabled:opacity-40 transition flex items-center gap-1"
             >
-              <ChevronRight className="w-4 h-4" />
+              <span>Trang sau</span>
+              <ChevronRight className="w-3.5 h-3.5" />
             </button>
           </div>
-
         </div>
+
       </div>
     </div>
   );
