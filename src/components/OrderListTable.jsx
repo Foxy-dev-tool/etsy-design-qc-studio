@@ -41,17 +41,19 @@ const formatNoteDisplay = (rawNote) => {
   return str;
 };
 
-// Extract size string from personalization object, customer text, or product title
+// Extract size string strictly from personalization object or customer text ONLY (No title or note fabrication)
 const extractOrderSize = (order) => {
+  if (!order) return '';
+
   if (order.personalization?.size && String(order.personalization.size).trim()) {
     return String(order.personalization.size).trim();
   }
   
-  const text = (order.personalization?.text || '') + '\n' + (order.productTitle || '') + '\n' + (order.note || '');
-  if (!text.trim()) return '';
+  const text = (order.personalization?.text || '').trim();
+  if (!text) return '';
 
-  // 1. Line starting with Size / size / Kích thước
-  const lineMatch = text.match(/(?:Khách đặt Size|Size|size|Kích thước|Dimensions)\s*[:=]\s*([^\n\r,]+)/i);
+  // 1. Line starting with Size / size / Kích thước / Dimensions
+  const lineMatch = text.match(/(?:Khách đặt Size|Select Size|Size|size|Kích thước|Dimensions)\s*[:=]\s*([^\n\r,]+)/i);
   if (lineMatch && lineMatch[1] && lineMatch[1].trim()) {
     const candidate = lineMatch[1].trim();
     if (!candidate.toLowerCase().startsWith('1 layer') && !candidate.toLowerCase().startsWith('2 layer')) {
@@ -59,8 +61,8 @@ const extractOrderSize = (order) => {
     }
   }
 
-  // 2. Explicit dimension patterns e.g. 6 in, 8x8, 8×8, 60" x 50", 10x10, 3.94 in, 12in-18in
-  const dimMatch = text.match(/(\d+(?:\.\d+)?\s*(?:in|inch|inches|cm|X\d+|\d+\s*["″]?\s*[x×*]\s*\d+["″]?|\d+in-\d+in))/i);
+  // 2. Strict dimension patterns in customer text only: e.g. 60" x 50", 8x8, 10 in, 6 in, 3.94 in
+  const dimMatch = text.match(/\b(\d+(?:\.\d+)?\s*["″]?\s*[x×*]\s*\d+(?:\.\d+)?\s*["″]?|\d+(?:\.\d+)?\s*(?:in|inch|inches|cm)\b)/i);
   if (dimMatch && dimMatch[1] && dimMatch[1].trim()) {
     return dimMatch[1].trim();
   }
@@ -434,12 +436,12 @@ export default function OrderListTable({
                               {/* Exact Size Badge & Copy Text Button Line */}
                               <div className="flex flex-wrap items-center gap-2 pt-0.5">
                                 {detectedSize ? (
-                                  <div className="px-3 py-1 rounded-lg bg-amber-50 text-amber-950 border border-amber-300 font-extrabold text-xs inline-flex items-center gap-1 shadow-2xs">
-                                    <span>Khách đặt Size:</span>
-                                    <span className="text-amber-700 font-extrabold">{detectedSize}</span>
+                                  <div className="px-3 py-1 rounded-xl bg-amber-50 text-amber-950 border border-amber-300/90 font-extrabold text-xs inline-flex items-center gap-1.5 shadow-2xs">
+                                    <span className="font-extrabold text-amber-950">Khách đặt Size:</span>
+                                    <span className="text-amber-900 font-black">{detectedSize}</span>
                                   </div>
                                 ) : (
-                                  <div className="px-3 py-1 rounded-lg bg-slate-50 text-slate-500 border border-slate-200 text-xs italic font-medium inline-flex items-center gap-1 shadow-2xs">
+                                  <div className="px-3 py-1 rounded-xl bg-slate-50 text-slate-500 border border-slate-200 text-xs italic font-medium inline-flex items-center gap-1 shadow-2xs">
                                     <span>(Yêu cầu khách không ghi Size)</span>
                                   </div>
                                 )}
@@ -447,7 +449,7 @@ export default function OrderListTable({
                                 {cleanText && (
                                   <button
                                     onClick={() => copyToClipboard(cleanText, `pers-${order.id}`)}
-                                    className="px-2.5 py-1 rounded-lg bg-slate-100 hover:bg-slate-200 text-slate-700 border border-slate-300 font-bold text-xs flex items-center gap-1 cursor-pointer transition active:scale-95 shadow-2xs"
+                                    className="px-3 py-1 rounded-xl bg-slate-50 hover:bg-slate-100 text-slate-700 border border-slate-300 font-bold text-xs flex items-center gap-1.5 cursor-pointer transition active:scale-95 shadow-2xs"
                                     title="Sao chép toàn bộ Yêu cầu khách"
                                   >
                                     {copiedTextId === `pers-${order.id}` ? (

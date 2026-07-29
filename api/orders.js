@@ -12,29 +12,29 @@ const pool = new Pool({
   connectionTimeoutMillis: 5000
 });
 
-// Comprehensive Size Parser to recognize explicit size lines, dimensions, and clothing sizes
+// Strict Size Parser scanning ONLY customer personalization text
 function parseSize(descriptionText, personalizationText) {
-  const fullText = (personalizationText || '') + '\n' + (descriptionText || '');
-  if (!fullText.trim()) return '';
+  const text = (personalizationText || '').trim();
+  if (!text) return '';
 
-  // 1. Line starting with Size: / size: / Kích thước: / Dimensions:
-  const lineMatch = fullText.match(/(?:Size|size|Kích thước|Dimensions)\s*[:=]\s*([^\n\r,]+)/i);
+  // 1. Explicit Size line e.g. Size: 6 in, Size: 60" x 50", Size: 8x8, Size: 10 in
+  const lineMatch = text.match(/(?:Khách đặt Size|Select Size|Size|size|Kích thước|Dimensions)\s*[:=]\s*([^\n\r,]+)/i);
   if (lineMatch && lineMatch[1] && lineMatch[1].trim()) {
-    const candidate = lineMatch[1].trim();
-    // Filter out false positives
-    if (!candidate.toLowerCase().startsWith('1 layer') && !candidate.toLowerCase().startsWith('2 layer')) {
-      return candidate;
+    const cand = lineMatch[1].trim();
+    if (!cand.toLowerCase().startsWith('1 layer') && !cand.toLowerCase().startsWith('2 layer')) {
+      return cand;
     }
   }
 
-  // 2. Explicit dimension patterns e.g. 8x8, 8×8, 60" x 50", 10x10, 3.94 in, 12in-18in
-  const dimMatch = fullText.match(/(\d+(?:\.\d+)?\s*(?:in|inch|inches|cm|X\d+|\d+\s*["″]?\s*[x×*]\s*\d+["″]?|\d+in-\d+in))/i);
+  // 2. Strict Dimensions pattern in customer text only:
+  // e.g. 60" x 50", 8x8, 8x8 inch, 10 in, 10.5in, 90x40cm, 3.94 in
+  const dimMatch = text.match(/\b(\d+(?:\.\d+)?\s*["″]?\s*[x×*]\s*\d+(?:\.\d+)?\s*["″]?|\d+(?:\.\d+)?\s*(?:in|inch|inches|cm)\b)/i);
   if (dimMatch && dimMatch[1] && dimMatch[1].trim()) {
     return dimMatch[1].trim();
   }
 
-  // 3. Clothing size e.g. 2XL, XL, Small, Medium, Large
-  const clothingMatch = fullText.match(/\b(XS|S|M|L|XL|2XL|3XL|4XL|5XL|Small|Medium|Large|X-Large|2X-Large|3X-Large)\b/i);
+  // 3. Clothing size
+  const clothingMatch = text.match(/\b(XS|S|M|L|XL|2XL|3XL|4XL|5XL|Small|Medium|Large|X-Large|2X-Large|3X-Large)\b/i);
   if (clothingMatch && clothingMatch[1] && clothingMatch[1].trim()) {
     return clothingMatch[1].trim();
   }
