@@ -86,8 +86,8 @@ export const validateAspectRatio = (actualWidth, actualHeight, targetWidth, targ
 // Months pattern to strip from person name lines (e.g. "Emilia - April" -> "Emilia")
 const MONTHS_PATTERN = /\b(?:january|february|march|april|may|june|july|august|september|october|november|december|jan|feb|mar|apr|jun|jul|aug|sep|oct|nov|dec)\b/gi;
 
-// System metadata labels to strip (e.g. Size:, Style:, Options:, Personalization:)
-const SYSTEM_LABELS_PATTERN = /^(?:Personalization|Size|Style|Option|Options|Background|Kích thước|Mẫu|Căn lề|Layer|Color|Font|Note|Customer Note|Product Note)\s*[:=].*$/gmi;
+// System metadata labels to strip (e.g. Size:, Style:, Options:)
+const METADATA_LINES_PATTERN = /^(?:Size|Style|Option|Options|Background|Kích thước|Mẫu|Căn lề|Layer|Color|Font|Note|Customer Note|Product Note|Dimensions|Select Size)\s*[:=].*$/gmi;
 
 /**
  * Smart Classifier: Extracts ONLY printed names & titles from raw customer text,
@@ -96,8 +96,11 @@ const SYSTEM_LABELS_PATTERN = /^(?:Personalization|Size|Style|Option|Options|Bac
 export const extractNamesAndTitleFromPersonalization = (rawText) => {
   if (!rawText || !rawText.trim()) return [];
 
-  // Remove system metadata lines
-  const cleanedText = rawText.replace(SYSTEM_LABELS_PATTERN, '');
+  // 1. Remove metadata lines like Size: 7.87 INCHES, Style: Heart
+  let cleanedText = rawText.replace(METADATA_LINES_PATTERN, '');
+
+  // 2. Remove inline header words like "Personalization:"
+  cleanedText = cleanedText.replace(/(?:Personalization|Personalized\s*Text|Customer\s*Text|Custom\s*Text)\s*[:=]?/gi, '');
 
   const lines = cleanedText.split('\n');
   const extractedNames = [];
@@ -106,11 +109,7 @@ export const extractNamesAndTitleFromPersonalization = (rawText) => {
     let trimmed = line.trim();
     if (!trimmed) continue;
 
-    // Strip inline "Personalization" word or prefix
-    trimmed = trimmed.replace(/^Personalization\s*[:=]?\s*/i, '').trim();
-    if (!trimmed) continue;
-
-    // Remove separator dashes e.g. "---"
+    // Remove separator dashes e.g. "---" or "==="
     if (trimmed.startsWith('---') || trimmed.startsWith('===')) continue;
 
     // Remove line number prefixes e.g. "1-", "2-", "1.", "2.", "Line 1:"
