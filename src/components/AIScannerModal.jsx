@@ -142,11 +142,43 @@ export default function AIScannerModal({
                         )}
                       </div>
 
-                      <div className="p-3 rounded-lg bg-white border border-slate-200 space-y-1">
-                        <span className="text-[10px] text-slate-500 font-semibold">Chữ quét được từ ảnh (OCR):</span>
-                        <p className={`font-extrabold text-xs ${report.textMatch ? 'text-emerald-700' : 'text-rose-700'}`}>
-                          {report.detectedText?.join(', ') || 'N/A'}
-                        </p>
+                      <div className="p-3 rounded-lg bg-white border border-slate-200 space-y-1.5">
+                        <span className="text-[10px] text-slate-500 font-semibold block">Kết Quả Đọc & Tìm Tên Trên Ảnh:</span>
+                        {report.targetNames && report.targetNames.length > 0 ? (
+                          <div className="space-y-1.5">
+                            {report.foundNames && report.foundNames.length > 0 && (
+                              <div>
+                                <span className="text-[9.5px] font-bold text-emerald-700 block mb-1">✅ Tên tìm thấy trên ảnh:</span>
+                                <div className="flex flex-wrap gap-1">
+                                  {report.foundNames.map((name, i) => (
+                                    <span key={i} className="px-2 py-0.5 rounded bg-emerald-50 text-emerald-800 border border-emerald-200 font-extrabold text-[11px] flex items-center gap-1">
+                                      <CheckCircle2 className="w-3 h-3 text-emerald-600 shrink-0" />
+                                      <span>{name}</span>
+                                    </span>
+                                  ))}
+                                </div>
+                              </div>
+                            )}
+
+                            {report.missingNames && report.missingNames.length > 0 && (
+                              <div>
+                                <span className="text-[9.5px] font-bold text-rose-700 block mb-1">❌ Tên thiếu hoặc sai trên ảnh:</span>
+                                <div className="flex flex-wrap gap-1">
+                                  {report.missingNames.map((name, i) => (
+                                    <span key={i} className="px-2 py-0.5 rounded bg-rose-50 text-rose-800 border border-rose-200 font-extrabold text-[11px] flex items-center gap-1">
+                                      <XCircle className="w-3 h-3 text-rose-600 shrink-0" />
+                                      <span>{name}</span>
+                                    </span>
+                                  ))}
+                                </div>
+                              </div>
+                            )}
+                          </div>
+                        ) : (
+                          <p className={`font-extrabold text-xs ${report.textMatch ? 'text-emerald-700' : 'text-rose-700'}`}>
+                            {report.detectedText?.filter(l => l.length > 3 && !l.includes('WTF')).slice(0, 5).join(' | ') || 'Không quét được chữ từ ảnh'}
+                          </p>
+                        )}
                       </div>
                     </div>
                   </div>

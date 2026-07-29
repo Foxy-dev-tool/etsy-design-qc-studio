@@ -252,6 +252,7 @@ export const runAIScanSimulated = async (order, designImageUrl, aiCustomPrompt =
       status: isTextMatch ? 'MATCH' : 'TEXT_MISMATCH',
       detectedText: ocrLines.length > 0 ? ocrLines : ['(Không quét được chữ từ ảnh - Font nghệ thuật/Cursive)'],
       targetNames: comparison.targetNames,
+      foundNames: comparison.foundNames,
       missingNames: comparison.missingNames,
       textMatch: isTextMatch,
       textMatchDetails: detailsMsg,
