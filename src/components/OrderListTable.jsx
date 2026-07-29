@@ -41,36 +41,29 @@ const formatNoteDisplay = (rawNote) => {
   return str;
 };
 
-// Extract size string strictly from personalization object or customer text ONLY (No title or note fabrication)
+// Extract size string strictly from customer personalization text ONLY (No DB size property, title, or note)
 const extractOrderSize = (order) => {
-  if (!order) return '';
+  if (!order || !order.personalization) return '';
 
-  if (order.personalization?.size && String(order.personalization.size).trim()) {
-    return String(order.personalization.size).trim();
-  }
-  
-  const text = (order.personalization?.text || '').trim();
+  const text = (order.personalization.text || '').trim();
   if (!text) return '';
 
-  // 1. Line starting with Size / size / Kích thước / Dimensions
-  const lineMatch = text.match(/(?:Khách đặt Size|Select Size|Size|size|Kích thước|Dimensions)\s*[:=]\s*([^\n\r,]+)/i);
+  // 1. Explicit Size line e.g. "Size (inches): 8", "Size: 60" x 50"", "Size: 8x8", "Kích thước: 10 in"
+  const lineMatch = text.match(/(?:Khách đặt Size|Select Size|Size\s*(?:\([^)]*\))?|size|Kích thước|Dimensions)\s*[:=]\s*([^\n\r,]+)/i);
   if (lineMatch && lineMatch[1] && lineMatch[1].trim()) {
-    const candidate = lineMatch[1].trim();
-    if (!candidate.toLowerCase().startsWith('1 layer') && !candidate.toLowerCase().startsWith('2 layer')) {
-      return candidate;
+    let cand = lineMatch[1].trim();
+    if (!cand.toLowerCase().startsWith('1 layer') && !cand.toLowerCase().startsWith('2 layer')) {
+      if (/^\d+(\.\d+)?$/.test(cand)) {
+        cand = cand + ' in';
+      }
+      return cand;
     }
   }
 
-  // 2. Strict dimension patterns in customer text only: e.g. 60" x 50", 8x8, 10 in, 6 in, 3.94 in
+  // 2. Explicit dimension patterns inside customer text e.g. "60" x 50"", "8x8", "10 in", "12in-18in"
   const dimMatch = text.match(/\b(\d+(?:\.\d+)?\s*["″]?\s*[x×*]\s*\d+(?:\.\d+)?\s*["″]?|\d+(?:\.\d+)?\s*(?:in|inch|inches|cm)\b)/i);
   if (dimMatch && dimMatch[1] && dimMatch[1].trim()) {
     return dimMatch[1].trim();
-  }
-
-  // 3. Clothing size e.g. 2XL, XL, Small, Medium, Large
-  const clothingMatch = text.match(/\b(XS|S|M|L|XL|2XL|3XL|4XL|5XL|Small|Medium|Large|X-Large|2X-Large|3X-Large)\b/i);
-  if (clothingMatch && clothingMatch[1] && clothingMatch[1].trim()) {
-    return clothingMatch[1].trim();
   }
 
   return '';
@@ -85,8 +78,8 @@ const cleanPersonalizationText = (rawText) => {
     const trimmed = line.trim();
     if (!trimmed) return false;
     
-    // Remove lines that explicitly state size (e.g. "Size: 6 in", "Select Size: 6 in", "Kích thước: 6 in")
-    if (trimmed.match(/^(?:Khách đặt Size|Select Size|Size|size|Kích thước|Dimensions)\s*[:=]/i)) {
+    // Remove lines that state size e.g. "Size (inches): 8", "Size: 6 in"
+    if (trimmed.match(/^(?:Khách đặt Size|Select Size|Size\s*(?:\([^)]*\))?|size|Kích thước|Dimensions)\s*[:=]/i)) {
       return false;
     }
     return true;

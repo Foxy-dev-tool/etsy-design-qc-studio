@@ -17,26 +17,22 @@ function parseSize(descriptionText, personalizationText) {
   const text = (personalizationText || '').trim();
   if (!text) return '';
 
-  // 1. Explicit Size line e.g. Size: 6 in, Size: 60" x 50", Size: 8x8, Size: 10 in
-  const lineMatch = text.match(/(?:Khách đặt Size|Select Size|Size|size|Kích thước|Dimensions)\s*[:=]\s*([^\n\r,]+)/i);
+  // 1. Explicit Size line e.g. "Size (inches): 8", "Size: 60" x 50"", "Size: 8x8", "Kích thước: 10 in"
+  const lineMatch = text.match(/(?:Khách đặt Size|Select Size|Size\s*(?:\([^)]*\))?|size|Kích thước|Dimensions)\s*[:=]\s*([^\n\r,]+)/i);
   if (lineMatch && lineMatch[1] && lineMatch[1].trim()) {
-    const cand = lineMatch[1].trim();
+    let cand = lineMatch[1].trim();
     if (!cand.toLowerCase().startsWith('1 layer') && !cand.toLowerCase().startsWith('2 layer')) {
+      if (/^\d+(\.\d+)?$/.test(cand)) {
+        cand = cand + ' in';
+      }
       return cand;
     }
   }
 
-  // 2. Strict Dimensions pattern in customer text only:
-  // e.g. 60" x 50", 8x8, 8x8 inch, 10 in, 10.5in, 90x40cm, 3.94 in
+  // 2. Explicit dimension patterns inside customer text e.g. "60" x 50"", "8x8", "10 in", "12in-18in"
   const dimMatch = text.match(/\b(\d+(?:\.\d+)?\s*["″]?\s*[x×*]\s*\d+(?:\.\d+)?\s*["″]?|\d+(?:\.\d+)?\s*(?:in|inch|inches|cm)\b)/i);
   if (dimMatch && dimMatch[1] && dimMatch[1].trim()) {
     return dimMatch[1].trim();
-  }
-
-  // 3. Clothing size
-  const clothingMatch = text.match(/\b(XS|S|M|L|XL|2XL|3XL|4XL|5XL|Small|Medium|Large|X-Large|2X-Large|3X-Large)\b/i);
-  if (clothingMatch && clothingMatch[1] && clothingMatch[1].trim()) {
-    return clothingMatch[1].trim();
   }
 
   return '';
