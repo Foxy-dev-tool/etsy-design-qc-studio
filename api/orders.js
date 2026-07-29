@@ -183,9 +183,11 @@ export default async function handler(req, res) {
 
     if (req.method === 'PUT') {
       const { orderId, fields } = req.body;
-      if (!orderId) {
-        return res.status(400).json({ error: 'Missing orderId' });
+      if (!orderId || !fields) {
+        return res.status(400).json({ error: 'Missing orderId or fields' });
       }
+
+      const isDeleteImage = fields.hasUploadedDesign === false || fields.designImage === null;
 
       const sql = `
         INSERT INTO public.qc_orders (
@@ -199,11 +201,11 @@ export default async function handler(req, res) {
           status = COALESCE(EXCLUDED.status, qc_orders.status),
           ratio_status = COALESCE(EXCLUDED.ratio_status, qc_orders.ratio_status),
           ai_status = COALESCE(EXCLUDED.ai_status, qc_orders.ai_status),
-          has_uploaded_design = COALESCE(EXCLUDED.has_uploaded_design, qc_orders.has_uploaded_design),
-          uploaded_design_file = COALESCE(EXCLUDED.uploaded_design_file, qc_orders.uploaded_design_file),
-          design_image = COALESCE(EXCLUDED.design_image, qc_orders.design_image),
-          design_width = COALESCE(EXCLUDED.design_width, qc_orders.design_width),
-          design_height = COALESCE(EXCLUDED.design_height, qc_orders.design_height),
+          has_uploaded_design = CASE WHEN $11 = true THEN false ELSE COALESCE(EXCLUDED.has_uploaded_design, qc_orders.has_uploaded_design) END,
+          uploaded_design_file = CASE WHEN $11 = true THEN NULL ELSE COALESCE(EXCLUDED.uploaded_design_file, qc_orders.uploaded_design_file) END,
+          design_image = CASE WHEN $11 = true THEN NULL ELSE COALESCE(EXCLUDED.design_image, qc_orders.design_image) END,
+          design_width = CASE WHEN $11 = true THEN NULL ELSE COALESCE(EXCLUDED.design_width, qc_orders.design_width) END,
+          design_height = CASE WHEN $11 = true THEN NULL ELSE COALESCE(EXCLUDED.design_height, qc_orders.design_height) END,
           updated_at = NOW();
       `;
 
@@ -217,7 +219,8 @@ export default async function handler(req, res) {
         fields.uploadedDesignFile !== undefined ? fields.uploadedDesignFile : null,
         fields.designImage !== undefined ? fields.designImage : null,
         fields.designWidth !== undefined ? fields.designWidth : null,
-        fields.designHeight !== undefined ? fields.designHeight : null
+        fields.designHeight !== undefined ? fields.designHeight : null,
+        isDeleteImage
       ]);
 
       return res.status(200).json({ success: true });
