@@ -95,24 +95,6 @@ export default function Header({
           {/* Right Action Tools & Cloud Sync Indicator */}
           <div className="flex items-center gap-2.5">
             
-            {/* Supabase Cloud Connection Status Badge */}
-            {isCloudConnected ? (
-              <div 
-                className="hidden sm:flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-emerald-500/20 text-emerald-300 border border-emerald-500/40 text-xs font-bold"
-                title="Đã kết nối Supabase Cloud Database! Mọi thao tác sẽ tự động lưu và đồng bộ real-time."
-              >
-                <Cloud className="w-4 h-4 text-emerald-400 animate-pulse" />
-                <span>Supabase Cloud</span>
-              </div>
-            ) : (
-              <div 
-                className="hidden sm:flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-slate-800 text-slate-300 border border-slate-700 text-xs font-bold"
-                title="Chưa kết nối Supabase Cloud. Hệ thống đang chạy chế độ Local Offline Safety."
-              >
-                <CloudOff className="w-4 h-4 text-slate-400" />
-                <span>Local Offline</span>
-              </div>
-            )}
 
             {/* Standalone Tools Execution Button */}
             <button

@@ -201,11 +201,6 @@ export default function OrderListTable({
         {/* Left Filter & Search */}
         <div className="flex flex-wrap items-center gap-2 flex-1">
           
-          <div className="flex items-center gap-2 bg-orange-50 border border-orange-200 px-3 py-1.5 rounded-lg text-orange-800 font-extrabold text-xs shrink-0">
-            <Database className="w-3.5 h-3.5 text-orange-600" />
-            <span>PostgreSQL: {orders.length.toLocaleString()} Đơn Real-time</span>
-          </div>
-
           <div className="relative min-w-[240px] flex-1 max-w-md">
             <Search className="w-3.5 h-3.5 text-slate-400 absolute left-2.5 top-1/2 -translate-y-1/2" />
             <input
