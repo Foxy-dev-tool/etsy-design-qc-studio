@@ -42,33 +42,30 @@ export const validateAspectRatio = (actualWidth, actualHeight, targetWidth, targ
   const actualRatio = actualWidth / actualHeight;
   const targetRatio = targetWidth / targetHeight;
 
-  // Calculate percentage difference in aspect ratio
+  // 1. Calculate percentage difference in aspect ratio
   const ratioDiffPercent = (Math.abs(actualRatio - targetRatio) / targetRatio) * 100;
-
-  // Check scale fit if proportionally scaled (e.g. 1000x1000 vs 3012x3012)
   const isValidRatio = ratioDiffPercent <= tolerancePercent;
 
-  const widthDelta = actualWidth - targetWidth;
-  const heightDelta = actualHeight - targetHeight;
+  // 2. Check resolution adequacy (File pixel size must be at least 85% of target pixel size for print quality)
+  const isResolutionAdequate = (actualWidth / targetWidth >= 0.85) && (actualHeight / targetHeight >= 0.85);
 
-  let status = 'MATCH';
+  const isValid = isValidRatio && isResolutionAdequate;
+
+  let status = isValid ? 'MATCH' : 'MISMATCH';
   let message = '';
 
-  if (isValidRatio) {
-    if (widthDelta === 0 && heightDelta === 0) {
-      status = 'MATCH';
-      message = `Khớp hoàn hảo 100% kích thước pixel (${targetWidth}x${targetHeight} px, Tỷ lệ ${targetRatio.toFixed(2)})`;
-    } else {
-      status = 'MATCH';
-      message = `Đúng tỷ lệ ${targetRatio.toFixed(2)}:1 (Sai số ${ratioDiffPercent.toFixed(2)}% ≤ ${tolerancePercent}%). Kích thước file: ${actualWidth}x${actualHeight} px.`;
-    }
+  if (isValid) {
+    message = `Khớp đúng tỷ lệ ${targetRatio.toFixed(2)}:1 & Đạt chuẩn độ phân giải (${actualWidth}×${actualHeight} px vs Khung mẫu ${targetWidth}×${targetHeight} px).`;
+  } else if (!isValidRatio) {
+    message = `SAI TỶ LỆ KÍCH THƯỚC! Tỷ lệ file upload là ${actualRatio.toFixed(2)} (${actualWidth}×${actualHeight}px), khung chuẩn là ${targetRatio.toFixed(2)} (${targetWidth}×${targetHeight}px). Lệch ${ratioDiffPercent.toFixed(1)}%!`;
   } else {
-    status = 'MISMATCH';
-    message = `SAI TỶ LỆ KÍCH THƯỚC! Tỷ lệ file upload là ${actualRatio.toFixed(2)} (${actualWidth}x${actualHeight}px), trong khi tỷ lệ tiêu chuẩn là ${targetRatio.toFixed(2)} (${targetWidth}x${targetHeight}px). Lệch ${ratioDiffPercent.toFixed(1)}%!`;
+    message = `ĐỘ PHÂN GIẢI KHÔNG ĐỦ CHUẨN IN! Kích thước file upload (${actualWidth}×${actualHeight}px) nhỏ hơn khung mẫu tiêu chuẩn (${targetWidth}×${targetHeight}px).`;
   }
 
   return {
-    isValid: isValidRatio,
+    isValid,
+    isValidRatio,
+    isResolutionAdequate,
     status,
     diffPercent: ratioDiffPercent,
     actualRatio,
@@ -77,8 +74,6 @@ export const validateAspectRatio = (actualWidth, actualHeight, targetWidth, targ
     actualHeight,
     targetWidth,
     targetHeight,
-    widthDelta,
-    heightDelta,
     message
   };
 };

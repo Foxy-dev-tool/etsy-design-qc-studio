@@ -92,10 +92,6 @@ const cleanPersonalizationText = (rawText) => {
 export const autoDetectProductGroup = (title = '', sku = '', productGroups = []) => {
   const combined = (String(title || '') + ' ' + String(sku || '')).toLowerCase();
 
-  if (combined.includes('bag') || combined.includes('basket') || combined.includes('bucket') || combined.includes('tote') || combined.includes('ruffle') || combined.includes('candy bucket') || combined.includes('shirt') || combined.includes('apparel') || combined.includes('gift')) {
-    const found = productGroups.find(g => g && (g.id === 'pg-other-no-safezone' || g.name.toLowerCase().includes('không safe zone') || g.name.toLowerCase().includes('bag')));
-    if (found) return found.name;
-  }
   if (combined.includes('wooden') || combined.includes('wood') || combined.includes('plaque') || combined.includes('stat sign') || combined.includes('sign') || combined.includes('ted01')) {
     const found = productGroups.find(g => g && g.name.toLowerCase().includes('wooden'));
     if (found) return found.name;
@@ -117,22 +113,17 @@ export const autoDetectProductGroup = (title = '', sku = '', productGroups = [])
     if (found) return found.name;
   }
 
-  return productGroups[0]?.name || '1 layer wooden';
+  return productGroups[0]?.name || 'Stained Glass Suncatcher';
 };
 
 // Safe Zone template matcher by size text or closest aspect ratio
 const getMatchedTemplateForGroup = (group, orderSizeText = '') => {
   if (!group || !Array.isArray(group.templates) || group.templates.length === 0) {
-    return { sizeLabel: 'Standard', widthPx: 3012, heightPx: 3012, templateImage: '/_4123920413.png', isSizeMismatch: false };
-  }
-
-  // If this group is "No Safe Zone" (e.g. Bags, Apparel)
-  if (group.id === 'pg-other-no-safezone' || group.templates[0]?.isNoSafeZoneGroup) {
-    return { ...group.templates[0], isNoSafeZoneGroup: true, isSizeMismatch: false };
+    return { sizeLabel: 'Standard', widthPx: 3012, heightPx: 3012, templateImage: '/_4123920413.png' };
   }
 
   if (!orderSizeText) {
-    return { ...group.templates[0], isNoSizeSpecified: true, isSizeMismatch: false };
+    return group.templates[0];
   }
 
   const searchText = orderSizeText.toLowerCase().replace(',', '.');
@@ -144,41 +135,37 @@ const getMatchedTemplateForGroup = (group, orderSizeText = '') => {
     const searchNums = searchText.match(/\d+(?:\.\d+)?/g) || [];
 
     if (searchText.includes(tmplSize)) {
-      return { ...tmpl, isSizeMismatch: false };
+      return tmpl;
     }
 
     if (tmplNums.length > 0 && searchNums.length > 0 && tmplNums.every(n => searchNums.includes(n))) {
-      return { ...tmpl, isSizeMismatch: false };
+      return tmpl;
     }
   }
 
   // Group specific matching
   if (group.name === 'Stained Glass Suncatcher') {
-    if (searchText.includes('9.84')) return { ...group.templates[3], isSizeMismatch: false };
-    if (searchText.includes('7.87')) return { ...group.templates[2], isSizeMismatch: false };
-    if (searchText.includes('5.9')) return { ...group.templates[1], isSizeMismatch: false };
-    if (searchText.includes('3.94')) return { ...group.templates[0], isSizeMismatch: false };
+    if (searchText.includes('9.84')) return group.templates[3];
+    if (searchText.includes('7.87')) return group.templates[2];
+    if (searchText.includes('5.9')) return group.templates[1];
+    if (searchText.includes('3.94')) return group.templates[0];
   } else if (group.name === 'Arylic Suncatcher') {
-    if (searchText.includes('12')) return { ...group.templates[1], isSizeMismatch: false };
-    if (searchText.includes('3.54')) return { ...group.templates[0], isSizeMismatch: false };
+    if (searchText.includes('12')) return group.templates[1];
+    if (searchText.includes('3.54')) return group.templates[0];
   } else if (group.name === 'Graduation Cap') {
-    if (searchText.includes('9.5')) return { ...group.templates[1], isSizeMismatch: false };
-    if (searchText.includes('7.5')) return { ...group.templates[0], isSizeMismatch: false };
+    if (searchText.includes('9.5')) return group.templates[1];
+    if (searchText.includes('7.5')) return group.templates[0];
   } else if (group.name === 'Desk Mat') {
-    if (searchText.includes('90x40') || searchText.includes('90*40')) return { ...group.templates[6], isSizeMismatch: false };
-    if (searchText.includes('80x30') || searchText.includes('80*30')) return { ...group.templates[5], isSizeMismatch: false };
-    if (searchText.includes('70x35') || searchText.includes('70*35')) return { ...group.templates[4], isSizeMismatch: false };
-    if (searchText.includes('60x30') || searchText.includes('60*30')) return { ...group.templates[3], isSizeMismatch: false };
-    if (searchText.includes('45x40') || searchText.includes('45*40')) return { ...group.templates[2], isSizeMismatch: false };
-    if (searchText.includes('30x25') || searchText.includes('30*25')) return { ...group.templates[1], isSizeMismatch: false };
-    if (searchText.includes('18x22') || searchText.includes('18*22')) return { ...group.templates[0], isSizeMismatch: false };
+    if (searchText.includes('90x40') || searchText.includes('90*40')) return group.templates[6];
+    if (searchText.includes('80x30') || searchText.includes('80*30')) return group.templates[5];
+    if (searchText.includes('70x35') || searchText.includes('70*35')) return group.templates[4];
+    if (searchText.includes('60x30') || searchText.includes('60*30')) return group.templates[3];
+    if (searchText.includes('45x40') || searchText.includes('45*40')) return group.templates[2];
+    if (searchText.includes('30x25') || searchText.includes('30*25')) return group.templates[1];
+    if (searchText.includes('18x22') || searchText.includes('18*22')) return group.templates[0];
   }
 
-  return {
-    ...group.templates[0],
-    isSizeMismatch: true,
-    requestedSize: orderSizeText
-  };
+  return group.templates[0];
 };
 
 export default function OrderListTable({
@@ -539,48 +526,16 @@ export default function OrderListTable({
 
                             {/* Matched Safe Zone Size Badge */}
                             {matchedTmpl && (
-                              matchedTmpl.isNoSafeZoneGroup ? (
-                                <div className="p-2 rounded-lg bg-blue-50 border border-blue-200 text-blue-900 text-[10.5px] space-y-0.5 shadow-2xs">
-                                  <div className="flex items-center gap-1 font-bold text-blue-700">
-                                    <Layers className="w-3.5 h-3.5 text-blue-600 shrink-0" />
-                                    <span>Sản Phẩm Phôi Tự Do:</span>
-                                  </div>
-                                  <div className="text-[9.5px] text-blue-600 font-medium leading-tight">
-                                    Không có Safe Zone cố định. QC đối chiếu file với phôi thực tế.
-                                  </div>
+                              <div className="p-2 rounded-lg bg-slate-100 border border-slate-200/90 text-slate-800 text-[10.5px] space-y-0.5 shadow-2xs">
+                                <div className="flex items-center justify-between font-bold">
+                                  <span className="text-emerald-700">✅ Khớp Safe Zone:</span>
+                                  <span className="font-extrabold text-slate-900">{matchedTmpl.sizeLabel}</span>
                                 </div>
-                              ) : matchedTmpl.isNoSizeSpecified ? (
-                                <div className="p-2 rounded-lg bg-amber-50 border border-amber-200 text-amber-900 text-[10.5px] space-y-0.5 shadow-2xs">
-                                  <div className="flex items-center gap-1 font-bold text-amber-700">
-                                    <AlertTriangle className="w-3.5 h-3.5 text-amber-600 shrink-0" />
-                                    <span>Khách Không Ghi Size:</span>
-                                  </div>
-                                  <div className="text-[9.5px] text-amber-700 font-medium leading-tight">
-                                    Cần QC đối chiếu kích thước file với phôi thực tế trước khi in.
-                                  </div>
+                                <div className="text-[9.5px] text-slate-500 font-mono flex items-center justify-between">
+                                  <span>Chuẩn Pixel:</span>
+                                  <span className="font-extrabold text-slate-700">{matchedTmpl.widthPx}×{matchedTmpl.heightPx} px</span>
                                 </div>
-                              ) : matchedTmpl.isSizeMismatch ? (
-                                <div className="p-2 rounded-lg bg-rose-50 border border-rose-200 text-rose-800 text-[10.5px] space-y-0.5 shadow-2xs">
-                                  <div className="flex items-center gap-1 font-bold text-rose-700">
-                                    <AlertTriangle className="w-3.5 h-3.5 text-rose-600 shrink-0" />
-                                    <span>Lệch Kích Thước Nhóm:</span>
-                                  </div>
-                                  <div className="text-[9.5px] text-rose-600 font-medium leading-tight">
-                                    Khách đặt <strong>{matchedTmpl.requestedSize}</strong> (Nhóm {currentGroupName} không có Size này). Vui lòng đổi đúng Nhóm SP.
-                                  </div>
-                                </div>
-                              ) : (
-                                <div className="p-2 rounded-lg bg-slate-100 border border-slate-200/90 text-slate-800 text-[10.5px] space-y-0.5 shadow-2xs">
-                                  <div className="flex items-center justify-between font-bold">
-                                    <span className="text-emerald-700">✅ Khớp Safe Zone:</span>
-                                    <span className="font-extrabold text-slate-900">{matchedTmpl.sizeLabel}</span>
-                                  </div>
-                                  <div className="text-[9.5px] text-slate-500 font-mono flex items-center justify-between">
-                                    <span>Chuẩn Pixel:</span>
-                                    <span className="font-extrabold text-slate-700">{matchedTmpl.widthPx}×{matchedTmpl.heightPx} px</span>
-                                  </div>
-                                </div>
-                              )
+                              </div>
                             )}
 
                             {/* Scan QC Trigger Button */}

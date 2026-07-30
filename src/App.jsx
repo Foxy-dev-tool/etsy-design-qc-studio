@@ -163,9 +163,7 @@ export default function App() {
         group.tolerancePercent
       );
 
-      const isSizeMismatch = matchedTmpl && matchedTmpl.isSizeMismatch;
-      const isOverallValid = ratioCheck.isValid && !isSizeMismatch;
-      const newStatus = isOverallValid ? 'Thành công' : 'Lỗi';
+      const newStatus = ratioCheck.isValid ? 'Thành công' : 'Lỗi';
       const compressedDataUrl = await compressImageForStorage(localDataUrl, 800, 0.85);
 
       // Save to localStorage as instant fail-safe backup
@@ -177,7 +175,7 @@ export default function App() {
           designWidth: dimensions.width,
           designHeight: dimensions.height,
           designAspectRatio: dimensions.aspectRatio,
-          ratioStatus: isOverallValid ? 'MATCH' : 'MISMATCH',
+          ratioStatus: ratioCheck.isValid ? 'MATCH' : 'MISMATCH',
           status: newStatus
         }));
       } catch (e) {
@@ -192,7 +190,7 @@ export default function App() {
         designWidth: dimensions.width,
         designHeight: dimensions.height,
         designAspectRatio: dimensions.aspectRatio,
-        ratioStatus: isOverallValid ? 'MATCH' : 'MISMATCH',
+        ratioStatus: ratioCheck.isValid ? 'MATCH' : 'MISMATCH',
         status: newStatus
       };
 
@@ -293,16 +291,14 @@ export default function App() {
         groupObj ? groupObj.tolerancePercent : 1.5
       );
 
-      const isSizeMismatch = matchedTmpl && matchedTmpl.isSizeMismatch;
-      const isOverallValid = ratioCheck.isValid && !isSizeMismatch;
-      const newStatus = isOverallValid ? 'Thành công' : 'Lỗi';
+      const newStatus = ratioCheck.isValid ? 'Thành công' : 'Lỗi';
 
       const updates = {
         productGroup: groupObj ? groupObj.name : targetOrder.productGroup,
         designWidth: dimensions.width,
         designHeight: dimensions.height,
         designAspectRatio: dimensions.aspectRatio,
-        ratioStatus: isOverallValid ? 'MATCH' : 'MISMATCH',
+        ratioStatus: ratioCheck.isValid ? 'MATCH' : 'MISMATCH',
         status: newStatus
       };
 
