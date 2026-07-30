@@ -152,6 +152,40 @@ export default function VisualInspectorModal({
               CHỜ UP ẢNH
             </span>
           </div>
+        ) : matchedTemplate.isNoSafeZoneGroup ? (
+          <div className="bg-blue-600 text-white px-5 py-2.5 flex items-center justify-between shadow-md shrink-0">
+            <div className="flex items-center gap-3">
+              <Layers className="w-5 h-5 text-white shrink-0" />
+              <div>
+                <h4 className="font-extrabold text-xs uppercase tracking-wide">
+                  ℹ️ SẢN PHẨM KHÔNG CÓ KHUNG SAFE ZONE CỐ ĐỊNH (TÚI / NÓN / ÁO / SẢN PHẨM KHÁC)
+                </h4>
+                <p className="text-[11px] opacity-95">
+                  File upload: ({actualW}×{actualH}px). Nhóm sản phẩm này không yêu cầu Safe Zone chuẩn. Đề nghị QC đối chiếu ảnh thiết kế với phôi thực tế.
+                </p>
+              </div>
+            </div>
+            <span className="px-2.5 py-0.5 bg-white text-blue-900 font-extrabold text-[11px] rounded-lg shadow-sm whitespace-nowrap">
+              NO SAFEZONE
+            </span>
+          </div>
+        ) : matchedTemplate.isNoSizeSpecified ? (
+          <div className="bg-amber-500 text-slate-950 px-5 py-2.5 flex items-center justify-between shadow-md shrink-0">
+            <div className="flex items-center gap-3">
+              <AlertTriangle className="w-5 h-5 text-slate-950 shrink-0" />
+              <div>
+                <h4 className="font-extrabold text-xs uppercase tracking-wide">
+                  ⚠️ CHÚ Ý: KHÁCH HÀNG KHÔNG GHI THÔNG SỐ SIZE SẢN PHẨM
+                </h4>
+                <p className="text-[11px] font-semibold opacity-95">
+                  File upload: ({actualW}×{actualH}px). Khách không yêu cầu Size cụ thể. Đề nghị QC đối chiếu kích thước file in với phôi thực tế trước khi duyệt!
+                </p>
+              </div>
+            </div>
+            <span className="px-2.5 py-0.5 bg-slate-950 text-amber-300 font-extrabold text-[11px] rounded-lg shadow-sm whitespace-nowrap">
+              CẦN CHECK SIZE
+            </span>
+          </div>
         ) : !ratioResult.isValid ? (
           <div className="bg-rose-600 text-white px-5 py-3 flex items-center justify-between shadow-md shrink-0">
             <div className="flex items-center gap-3">
@@ -161,7 +195,7 @@ export default function VisualInspectorModal({
                   🚨 HỆ THỐNG BÁO LỖI: SAI TỶ LỆ KHUNG HÌNH SẢN PHẨM!
                 </h4>
                 <p className="text-xs opacity-95">
-                  File thiết kế upload ({actualW}x{actualH}px - {scaleWidthPct.toFixed(1)}% Rộng × {scaleHeightPct.toFixed(1)}% Cao) <strong>KHÔNG KHỚP</strong> với Khung kích thước Template tiêu chuẩn ({targetW}x{targetH}px). Lệch {ratioResult.diffPercent.toFixed(1)}%!
+                  File thiết kế upload ({actualW}×{actualH}px) <strong>KHÔNG KHỚP TỶ LỆ</strong> với Khung Template tiêu chuẩn ({targetW}×{targetH}px). Lệch {ratioResult.diffPercent.toFixed(1)}%!
                 </p>
               </div>
             </div>
@@ -175,10 +209,10 @@ export default function VisualInspectorModal({
               <CheckCircle2 className="w-5 h-5 text-white shrink-0" />
               <div>
                 <h4 className="font-extrabold text-xs uppercase tracking-wide">
-                  ✅ HỆ THỐNG XÁC NHẬN: KHỚP 100% KHUNG KÍCH THƯỚC SAFE ZONE
+                  ✅ ĐÚNG TỶ LỆ KHUNG MẪU ({templateAspectRatio.toFixed(2)}:1)
                 </h4>
                 <p className="text-[11px] opacity-95">
-                  File thiết kế ({actualW}x{actualH}px) khớp hoàn hảo với Khung Template Safe Zone size {matchedTemplate.sizeLabel}.
+                  File thiết kế upload ({actualW}×{actualH}px) chuẩn tỷ lệ khung mẫu Safe Zone size {matchedTemplate.sizeLabel} ({targetW}×{targetH}px).
                 </p>
               </div>
             </div>

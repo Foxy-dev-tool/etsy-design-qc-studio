@@ -92,6 +92,10 @@ const cleanPersonalizationText = (rawText) => {
 export const autoDetectProductGroup = (title = '', sku = '', productGroups = []) => {
   const combined = (String(title || '') + ' ' + String(sku || '')).toLowerCase();
 
+  if (combined.includes('bag') || combined.includes('basket') || combined.includes('bucket') || combined.includes('tote') || combined.includes('ruffle') || combined.includes('candy bucket') || combined.includes('shirt') || combined.includes('apparel') || combined.includes('gift')) {
+    const found = productGroups.find(g => g && (g.id === 'pg-other-no-safezone' || g.name.toLowerCase().includes('không safe zone') || g.name.toLowerCase().includes('bag')));
+    if (found) return found.name;
+  }
   if (combined.includes('wooden') || combined.includes('wood') || combined.includes('plaque') || combined.includes('stat sign') || combined.includes('sign') || combined.includes('ted01')) {
     const found = productGroups.find(g => g && g.name.toLowerCase().includes('wooden'));
     if (found) return found.name;
@@ -122,8 +126,13 @@ const getMatchedTemplateForGroup = (group, orderSizeText = '') => {
     return { sizeLabel: 'Standard', widthPx: 3012, heightPx: 3012, templateImage: '/_4123920413.png', isSizeMismatch: false };
   }
 
+  // If this group is "No Safe Zone" (e.g. Bags, Apparel)
+  if (group.id === 'pg-other-no-safezone' || group.templates[0]?.isNoSafeZoneGroup) {
+    return { ...group.templates[0], isNoSafeZoneGroup: true, isSizeMismatch: false };
+  }
+
   if (!orderSizeText) {
-    return { ...group.templates[0], isSizeMismatch: false };
+    return { ...group.templates[0], isNoSizeSpecified: true, isSizeMismatch: false };
   }
 
   const searchText = orderSizeText.toLowerCase().replace(',', '.');
@@ -530,7 +539,27 @@ export default function OrderListTable({
 
                             {/* Matched Safe Zone Size Badge */}
                             {matchedTmpl && (
-                              matchedTmpl.isSizeMismatch ? (
+                              matchedTmpl.isNoSafeZoneGroup ? (
+                                <div className="p-2 rounded-lg bg-blue-50 border border-blue-200 text-blue-900 text-[10.5px] space-y-0.5 shadow-2xs">
+                                  <div className="flex items-center gap-1 font-bold text-blue-700">
+                                    <Layers className="w-3.5 h-3.5 text-blue-600 shrink-0" />
+                                    <span>Sản Phẩm Phôi Tự Do:</span>
+                                  </div>
+                                  <div className="text-[9.5px] text-blue-600 font-medium leading-tight">
+                                    Không có Safe Zone cố định. QC đối chiếu file với phôi thực tế.
+                                  </div>
+                                </div>
+                              ) : matchedTmpl.isNoSizeSpecified ? (
+                                <div className="p-2 rounded-lg bg-amber-50 border border-amber-200 text-amber-900 text-[10.5px] space-y-0.5 shadow-2xs">
+                                  <div className="flex items-center gap-1 font-bold text-amber-700">
+                                    <AlertTriangle className="w-3.5 h-3.5 text-amber-600 shrink-0" />
+                                    <span>Khách Không Ghi Size:</span>
+                                  </div>
+                                  <div className="text-[9.5px] text-amber-700 font-medium leading-tight">
+                                    Cần QC đối chiếu kích thước file với phôi thực tế trước khi in.
+                                  </div>
+                                </div>
+                              ) : matchedTmpl.isSizeMismatch ? (
                                 <div className="p-2 rounded-lg bg-rose-50 border border-rose-200 text-rose-800 text-[10.5px] space-y-0.5 shadow-2xs">
                                   <div className="flex items-center gap-1 font-bold text-rose-700">
                                     <AlertTriangle className="w-3.5 h-3.5 text-rose-600 shrink-0" />

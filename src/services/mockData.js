@@ -377,6 +377,27 @@ export const INITIAL_PRODUCT_GROUPS = [
         safeMarginPx: 130
       }
     ]
+  },
+  {
+    id: 'pg-other-no-safezone',
+    name: 'Sản phẩm khác (Bags, Apparel, v.v. - Không Safe Zone)',
+    description: 'Dành cho túi canvas, nón, áo, giỏ quà không có mẫu Safe Zone cố định',
+    baseMockup: '/_4123920413.png',
+    tolerancePercent: 5.0,
+    minDpi: 300,
+    aiRulesPrompt: 'Sản phẩm không có khung Safe Zone chuẩn. QC đối chiếu ảnh thiết kế thủ công.',
+    templates: [
+      {
+        sizeLabel: 'Tự do / Phôi mở',
+        widthPx: 3012,
+        heightPx: 3012,
+        aspectRatio: 1.0,
+        dpi: 300,
+        templateImage: '/_4123920413.png',
+        safeMarginPx: 0,
+        isNoSafeZoneGroup: true
+      }
+    ]
   }
 ];
 
