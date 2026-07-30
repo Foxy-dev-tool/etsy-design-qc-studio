@@ -88,14 +88,42 @@ const cleanPersonalizationText = (rawText) => {
   return filtered.join('\n').trim();
 };
 
+// Auto-detect matching Product Group from Product Title and SKU
+export const autoDetectProductGroup = (title = '', sku = '', productGroups = []) => {
+  const combined = (String(title || '') + ' ' + String(sku || '')).toLowerCase();
+
+  if (combined.includes('wooden') || combined.includes('wood') || combined.includes('plaque') || combined.includes('stat sign') || combined.includes('sign') || combined.includes('ted01')) {
+    const found = productGroups.find(g => g && g.name.toLowerCase().includes('wooden'));
+    if (found) return found.name;
+  }
+  if (combined.includes('arylic') || (combined.includes('acrylic') && combined.includes('suncatcher'))) {
+    const found = productGroups.find(g => g && (g.name.toLowerCase().includes('arylic') || g.name.toLowerCase().includes('acrylic')));
+    if (found) return found.name;
+  }
+  if (combined.includes('suncatcher') || combined.includes('stained glass')) {
+    const found = productGroups.find(g => g && g.name.toLowerCase().includes('stained glass'));
+    if (found) return found.name;
+  }
+  if (combined.includes('desk mat') || combined.includes('mousepad')) {
+    const found = productGroups.find(g => g && g.name.toLowerCase().includes('desk mat'));
+    if (found) return found.name;
+  }
+  if (combined.includes('graduation') || combined.includes('cap')) {
+    const found = productGroups.find(g => g && g.name.toLowerCase().includes('graduation'));
+    if (found) return found.name;
+  }
+
+  return productGroups[0]?.name || '1 layer wooden';
+};
+
 // Safe Zone template matcher by size text or closest aspect ratio
 const getMatchedTemplateForGroup = (group, orderSizeText = '') => {
   if (!group || !Array.isArray(group.templates) || group.templates.length === 0) {
-    return { sizeLabel: 'Standard', widthPx: 3012, heightPx: 3012, templateImage: '/_4123920413.png' };
+    return { sizeLabel: 'Standard', widthPx: 3012, heightPx: 3012, templateImage: '/_4123920413.png', isSizeMismatch: false };
   }
 
   if (!orderSizeText) {
-    return group.templates[0];
+    return { ...group.templates[0], isSizeMismatch: false };
   }
 
   const searchText = orderSizeText.toLowerCase().replace(',', '.');
@@ -103,34 +131,45 @@ const getMatchedTemplateForGroup = (group, orderSizeText = '') => {
   // Try exact size match first
   for (const tmpl of group.templates) {
     const tmplSize = tmpl.sizeLabel.toLowerCase().replace(',', '.');
+    const tmplNums = tmplSize.match(/\d+(?:\.\d+)?/g) || [];
+    const searchNums = searchText.match(/\d+(?:\.\d+)?/g) || [];
+
     if (searchText.includes(tmplSize)) {
-      return tmpl;
+      return { ...tmpl, isSizeMismatch: false };
+    }
+
+    if (tmplNums.length > 0 && searchNums.length > 0 && tmplNums.every(n => searchNums.includes(n))) {
+      return { ...tmpl, isSizeMismatch: false };
     }
   }
 
   // Group specific matching
   if (group.name === 'Stained Glass Suncatcher') {
-    if (searchText.includes('9.84')) return group.templates[3];
-    if (searchText.includes('7.87')) return group.templates[2];
-    if (searchText.includes('5.9')) return group.templates[1];
-    if (searchText.includes('3.94')) return group.templates[0];
+    if (searchText.includes('9.84')) return { ...group.templates[3], isSizeMismatch: false };
+    if (searchText.includes('7.87')) return { ...group.templates[2], isSizeMismatch: false };
+    if (searchText.includes('5.9')) return { ...group.templates[1], isSizeMismatch: false };
+    if (searchText.includes('3.94')) return { ...group.templates[0], isSizeMismatch: false };
   } else if (group.name === 'Arylic Suncatcher') {
-    if (searchText.includes('12')) return group.templates[1];
-    if (searchText.includes('3.54')) return group.templates[0];
+    if (searchText.includes('12')) return { ...group.templates[1], isSizeMismatch: false };
+    if (searchText.includes('3.54')) return { ...group.templates[0], isSizeMismatch: false };
   } else if (group.name === 'Graduation Cap') {
-    if (searchText.includes('9.5')) return group.templates[1];
-    if (searchText.includes('7.5')) return group.templates[0];
+    if (searchText.includes('9.5')) return { ...group.templates[1], isSizeMismatch: false };
+    if (searchText.includes('7.5')) return { ...group.templates[0], isSizeMismatch: false };
   } else if (group.name === 'Desk Mat') {
-    if (searchText.includes('90x40') || searchText.includes('90*40')) return group.templates[6];
-    if (searchText.includes('80x30') || searchText.includes('80*30')) return group.templates[5];
-    if (searchText.includes('70x35') || searchText.includes('70*35')) return group.templates[4];
-    if (searchText.includes('60x30') || searchText.includes('60*30')) return group.templates[3];
-    if (searchText.includes('45x40') || searchText.includes('45*40')) return group.templates[2];
-    if (searchText.includes('30x25') || searchText.includes('30*25')) return group.templates[1];
-    if (searchText.includes('18x22') || searchText.includes('18*22')) return group.templates[0];
+    if (searchText.includes('90x40') || searchText.includes('90*40')) return { ...group.templates[6], isSizeMismatch: false };
+    if (searchText.includes('80x30') || searchText.includes('80*30')) return { ...group.templates[5], isSizeMismatch: false };
+    if (searchText.includes('70x35') || searchText.includes('70*35')) return { ...group.templates[4], isSizeMismatch: false };
+    if (searchText.includes('60x30') || searchText.includes('60*30')) return { ...group.templates[3], isSizeMismatch: false };
+    if (searchText.includes('45x40') || searchText.includes('45*40')) return { ...group.templates[2], isSizeMismatch: false };
+    if (searchText.includes('30x25') || searchText.includes('30*25')) return { ...group.templates[1], isSizeMismatch: false };
+    if (searchText.includes('18x22') || searchText.includes('18*22')) return { ...group.templates[0], isSizeMismatch: false };
   }
 
-  return group.templates[0];
+  return {
+    ...group.templates[0],
+    isSizeMismatch: true,
+    requestedSize: orderSizeText
+  };
 };
 
 export default function OrderListTable({
@@ -341,7 +380,7 @@ export default function OrderListTable({
                   const cleanNote = formatNoteDisplay(order.note);
 
                   // Fail-proof group & template retrieval
-                  const currentGroupName = order.productGroup || 'Stained Glass Suncatcher';
+                  const currentGroupName = order.productGroup || autoDetectProductGroup(order.productTitle, order.sku, productGroups);
                   const currentGroupObj = productGroups.find(g => g && g.name === currentGroupName) || productGroups[0];
                   const matchedTmpl = getMatchedTemplateForGroup(
                     currentGroupObj, 
@@ -491,16 +530,28 @@ export default function OrderListTable({
 
                             {/* Matched Safe Zone Size Badge */}
                             {matchedTmpl && (
-                              <div className="p-2 rounded-lg bg-slate-100 border border-slate-200/90 text-slate-800 text-[10.5px] space-y-0.5 shadow-2xs">
-                                <div className="flex items-center justify-between font-bold">
-                                  <span className="text-emerald-700">✅ Khớp Safe Zone:</span>
-                                  <span className="font-extrabold text-slate-900">{matchedTmpl.sizeLabel}</span>
+                              matchedTmpl.isSizeMismatch ? (
+                                <div className="p-2 rounded-lg bg-rose-50 border border-rose-200 text-rose-800 text-[10.5px] space-y-0.5 shadow-2xs">
+                                  <div className="flex items-center gap-1 font-bold text-rose-700">
+                                    <AlertTriangle className="w-3.5 h-3.5 text-rose-600 shrink-0" />
+                                    <span>Lệch Kích Thước Nhóm:</span>
+                                  </div>
+                                  <div className="text-[9.5px] text-rose-600 font-medium leading-tight">
+                                    Khách đặt <strong>{matchedTmpl.requestedSize}</strong> (Nhóm {currentGroupName} không có Size này). Vui lòng đổi đúng Nhóm SP.
+                                  </div>
                                 </div>
-                                <div className="text-[9.5px] text-slate-500 font-mono flex items-center justify-between">
-                                  <span>Chuẩn Pixel:</span>
-                                  <span className="font-extrabold text-slate-700">{matchedTmpl.widthPx}×{matchedTmpl.heightPx} px</span>
+                              ) : (
+                                <div className="p-2 rounded-lg bg-slate-100 border border-slate-200/90 text-slate-800 text-[10.5px] space-y-0.5 shadow-2xs">
+                                  <div className="flex items-center justify-between font-bold">
+                                    <span className="text-emerald-700">✅ Khớp Safe Zone:</span>
+                                    <span className="font-extrabold text-slate-900">{matchedTmpl.sizeLabel}</span>
+                                  </div>
+                                  <div className="text-[9.5px] text-slate-500 font-mono flex items-center justify-between">
+                                    <span>Chuẩn Pixel:</span>
+                                    <span className="font-extrabold text-slate-700">{matchedTmpl.widthPx}×{matchedTmpl.heightPx} px</span>
+                                  </div>
                                 </div>
-                              </div>
+                              )
                             )}
 
                             {/* Scan QC Trigger Button */}

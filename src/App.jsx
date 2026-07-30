@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import Header from './components/Header';
-import OrderListTable from './components/OrderListTable';
+import OrderListTable, { autoDetectProductGroup } from './components/OrderListTable';
 import VisualInspectorModal from './components/VisualInspectorModal';
 import ProductGroupConfig from './components/ProductGroupConfig';
 import AIScannerModal from './components/AIScannerModal';
@@ -163,7 +163,9 @@ export default function App() {
         group.tolerancePercent
       );
 
-      const newStatus = ratioCheck.isValid ? 'Thành công' : 'Lỗi';
+      const isSizeMismatch = matchedTmpl && matchedTmpl.isSizeMismatch;
+      const isOverallValid = ratioCheck.isValid && !isSizeMismatch;
+      const newStatus = isOverallValid ? 'Thành công' : 'Lỗi';
       const compressedDataUrl = await compressImageForStorage(localDataUrl, 800, 0.85);
 
       // Save to localStorage as instant fail-safe backup
@@ -175,7 +177,7 @@ export default function App() {
           designWidth: dimensions.width,
           designHeight: dimensions.height,
           designAspectRatio: dimensions.aspectRatio,
-          ratioStatus: ratioCheck.isValid ? 'MATCH' : 'MISMATCH',
+          ratioStatus: isOverallValid ? 'MATCH' : 'MISMATCH',
           status: newStatus
         }));
       } catch (e) {
@@ -190,7 +192,7 @@ export default function App() {
         designWidth: dimensions.width,
         designHeight: dimensions.height,
         designAspectRatio: dimensions.aspectRatio,
-        ratioStatus: ratioCheck.isValid ? 'MATCH' : 'MISMATCH',
+        ratioStatus: isOverallValid ? 'MATCH' : 'MISMATCH',
         status: newStatus
       };
 
@@ -291,14 +293,16 @@ export default function App() {
         groupObj ? groupObj.tolerancePercent : 1.5
       );
 
-      const newStatus = ratioCheck.isValid ? 'Thành công' : 'Lỗi';
+      const isSizeMismatch = matchedTmpl && matchedTmpl.isSizeMismatch;
+      const isOverallValid = ratioCheck.isValid && !isSizeMismatch;
+      const newStatus = isOverallValid ? 'Thành công' : 'Lỗi';
 
       const updates = {
         productGroup: groupObj ? groupObj.name : targetOrder.productGroup,
         designWidth: dimensions.width,
         designHeight: dimensions.height,
         designAspectRatio: dimensions.aspectRatio,
-        ratioStatus: ratioCheck.isValid ? 'MATCH' : 'MISMATCH',
+        ratioStatus: isOverallValid ? 'MATCH' : 'MISMATCH',
         status: newStatus
       };
 
