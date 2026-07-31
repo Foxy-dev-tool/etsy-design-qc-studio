@@ -134,6 +134,25 @@ export const autoDetectProductGroup = (title = '', sku = '', productGroups = [])
   return productGroups[0]?.name || 'Stained Glass Suncatcher';
 };
 
+// Parse range from size labels like "6in-12in", "14in-18in", "20-24", "6 - 12 inch" -> { min: 6, max: 12 }
+export const parseRangeFromLabel = (sizeLabel = '') => {
+  if (!sizeLabel || typeof sizeLabel !== 'string') return null;
+
+  // Match patterns like "6in-12in", "14in-18in", "6 - 12", "6in - 12in", "6-12in", "6in to 12in"
+  const rangeMatch = sizeLabel.match(/(\d+(?:\.\d+)?)\s*(?:in|inch|inches)?\s*[\-–—to\s]+\s*(\d+(?:\.\d+)?)\s*(?:in|inch|inches)?/i);
+  if (rangeMatch && rangeMatch[1] && rangeMatch[2]) {
+    const num1 = parseFloat(rangeMatch[1]);
+    const num2 = parseFloat(rangeMatch[2]);
+    if (!isNaN(num1) && !isNaN(num2)) {
+      return {
+        min: Math.min(num1, num2),
+        max: Math.max(num1, num2)
+      };
+    }
+  }
+  return null;
+};
+
 // Strict Size vs Product Group Compatibility Checker
 export const checkSizeMatchStatus = (group, orderSizeText = '') => {
   if (!group || !Array.isArray(group.templates) || group.templates.length === 0) {
@@ -150,8 +169,23 @@ export const checkSizeMatchStatus = (group, orderSizeText = '') => {
   }
 
   const searchText = orderSizeText.toLowerCase().replace(',', '.');
+  const customerNums = (searchText.match(/\d+(?:\.\d+)?/g) || []).map(n => parseFloat(n)).filter(n => !isNaN(n));
 
-  // Try exact size match first
+  // 1. Try RANGE MATCHING first (e.g. template is "6in-12in" or "14in-18in", customer size is 8, 9.84, or 16)
+  if (customerNums.length > 0) {
+    for (const tmpl of group.templates) {
+      const range = parseRangeFromLabel(tmpl.sizeLabel);
+      if (range) {
+        // Check if ALL numbers in customer size string fall inside range [min - 0.1, max + 0.1]
+        const allInRange = customerNums.every(num => num >= range.min - 0.1 && num <= range.max + 0.1);
+        if (allInRange) {
+          return { isMatched: true, template: tmpl, matchedByRange: true };
+        }
+      }
+    }
+  }
+
+  // 2. Try EXACT SIZE LABEL MATCHING
   for (const tmpl of group.templates) {
     const tmplSize = tmpl.sizeLabel.toLowerCase().replace(',', '.');
     const tmplNums = tmplSize.match(/\d+(?:\.\d+)?/g) || [];
@@ -166,29 +200,29 @@ export const checkSizeMatchStatus = (group, orderSizeText = '') => {
     }
   }
 
-  // Group specific matching
+  // 3. Group specific fallback matching
   if (group.name === 'Stained Glass Suncatcher') {
-    if (searchText.includes('9.84')) return { isMatched: true, template: group.templates[3] };
-    if (searchText.includes('7.87')) return { isMatched: true, template: group.templates[2] };
-    if (searchText.includes('5.9')) return { isMatched: true, template: group.templates[1] };
+    if (searchText.includes('9.84')) return { isMatched: true, template: group.templates[3] || group.templates[0] };
+    if (searchText.includes('7.87')) return { isMatched: true, template: group.templates[2] || group.templates[0] };
+    if (searchText.includes('5.9')) return { isMatched: true, template: group.templates[1] || group.templates[0] };
     if (searchText.includes('3.94')) return { isMatched: true, template: group.templates[0] };
   } else if (group.name === 'Arylic Suncatcher') {
-    if (searchText.includes('12')) return { isMatched: true, template: group.templates[1] };
+    if (searchText.includes('12')) return { isMatched: true, template: group.templates[1] || group.templates[0] };
     if (searchText.includes('3.54')) return { isMatched: true, template: group.templates[0] };
   } else if (group.name === 'Graduation Cap') {
-    if (searchText.includes('9.5')) return { isMatched: true, template: group.templates[1] };
+    if (searchText.includes('9.5')) return { isMatched: true, template: group.templates[1] || group.templates[0] };
     if (searchText.includes('7.5')) return { isMatched: true, template: group.templates[0] };
   } else if (group.name === 'Desk Mat') {
-    if (searchText.includes('90x40') || searchText.includes('90*40')) return { isMatched: true, template: group.templates[6] };
-    if (searchText.includes('80x30') || searchText.includes('80*30')) return { isMatched: true, template: group.templates[5] };
-    if (searchText.includes('70x35') || searchText.includes('70*35')) return { isMatched: true, template: group.templates[4] };
-    if (searchText.includes('60x30') || searchText.includes('60*30')) return { isMatched: true, template: group.templates[3] };
-    if (searchText.includes('45x40') || searchText.includes('45*40')) return { isMatched: true, template: group.templates[2] };
-    if (searchText.includes('30x25') || searchText.includes('30*25')) return { isMatched: true, template: group.templates[1] };
+    if (searchText.includes('90x40') || searchText.includes('90*40')) return { isMatched: true, template: group.templates[6] || group.templates[0] };
+    if (searchText.includes('80x30') || searchText.includes('80*30')) return { isMatched: true, template: group.templates[5] || group.templates[0] };
+    if (searchText.includes('70x35') || searchText.includes('70*35')) return { isMatched: true, template: group.templates[4] || group.templates[0] };
+    if (searchText.includes('60x30') || searchText.includes('60*30')) return { isMatched: true, template: group.templates[3] || group.templates[0] };
+    if (searchText.includes('45x40') || searchText.includes('45*40')) return { isMatched: true, template: group.templates[2] || group.templates[0] };
+    if (searchText.includes('30x25') || searchText.includes('30*25')) return { isMatched: true, template: group.templates[1] || group.templates[0] };
     if (searchText.includes('18x22') || searchText.includes('18*22')) return { isMatched: true, template: group.templates[0] };
   }
 
-  // IF NO TEMPLATE MATCHED (e.g. orderSizeText is "Sweatshirt | M" but group is "Stained Glass Suncatcher")
+  // IF NO TEMPLATE MATCHED (e.g. orderSizeText is "30 in" but range templates are "6in-12in", "14in-18in", "20in-24in")
   return {
     isMatched: false,
     template: group.templates[0],
