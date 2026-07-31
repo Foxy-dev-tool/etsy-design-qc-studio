@@ -11,6 +11,7 @@ import {
   fetchOrdersFromPostgres, 
   updateOrderInPostgres 
 } from './services/postgresClient';
+import { uploadImageToBizfly, deleteImageFromBizfly } from './services/bizflyStorage';
 import { Check, Loader2, Database, RefreshCw } from 'lucide-react';
 
 // Helper to convert File to Base64 Data URL
@@ -154,13 +155,15 @@ export default function App() {
       );
 
       const newStatus = ratioCheck.isValid ? 'Thành công' : 'Lỗi';
-      const compressedDataUrl = await compressImageForStorage(localDataUrl, 800, 0.85);
+
+      setCsvNotifyMsg(`⚡ Đang tải ảnh lên Bizfly Cloud Storage...`);
+      const bizflyPublicUrl = await uploadImageToBizfly(localDataUrl, targetOrder.id || targetOrder.orderNumber);
 
       const updates = {
         productGroup: group.name,
         hasUploadedDesign: true,
         uploadedDesignFile: imageFile.name,
-        designImage: compressedDataUrl,
+        designImage: bizflyPublicUrl,
         designWidth: dimensions.width,
         designHeight: dimensions.height,
         designAspectRatio: dimensions.aspectRatio,
@@ -186,21 +189,25 @@ export default function App() {
         }));
       }
 
-      setCsvNotifyMsg(`✅ Upload ảnh "${imageFile.name}" thành công! Kích thước: ${dimensions.width}×${dimensions.height}px. Trạng thái: ${newStatus}`);
+      setCsvNotifyMsg(`✅ Upload ảnh lên Bizfly Cloud thành công! Kích thước gốc: ${dimensions.width}×${dimensions.height}px.`);
       setTimeout(() => setCsvNotifyMsg(''), 4000);
 
-      // 2. Sync to PostgreSQL Database
+      // 2. Sync URL to PostgreSQL Database
       updateOrderInPostgres(targetOrder.id, updates);
 
     } catch (err) {
-      console.error('Lỗi khi đọc file ảnh upload:', err);
-      setCsvNotifyMsg(`❌ Lỗi khi đọc file ảnh: ${err.message || 'File không hợp lệ'}`);
+      console.error('Lỗi khi upload ảnh lên Bizfly Cloud Storage:', err);
+      setCsvNotifyMsg(`❌ Lỗi khi upload ảnh lên Bizfly Cloud: ${err.message || 'Lỗi mạng'}`);
       setTimeout(() => setCsvNotifyMsg(''), 4000);
     }
   };
 
   // DELETE UPLOADED DESIGN IMAGE PIPELINE
   const handleDeleteDesign = (targetOrder) => {
+    if (targetOrder.designImage && targetOrder.designImage.includes('bfcplatform.vn')) {
+      deleteImageFromBizfly(targetOrder.designImage).catch(err => console.warn('Lỗi xóa trên Bizfly:', err));
+    }
+
     const updates = {
       productGroup: targetOrder.productGroup,
       hasUploadedDesign: false,
