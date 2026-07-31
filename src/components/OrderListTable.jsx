@@ -49,10 +49,13 @@ const extractOrderSize = (order) => {
     : (order.personalization?.text || order.personalizationRaw || '');
   if (!text || typeof text !== 'string') return '';
 
-  // 1. Explicit Size line e.g. "SIZE + STYLE: Sweatshirt | M", "Size (inches): 8", "Size: 60" x 50"", "Size: 8x8"
-  const lineMatch = text.match(/(?:Khách đặt Size|Select Size|Size(?:\s*[\+/&]\s*(?:Style|Color|Type))?\s*(?:\([^)]*\))?|size|Kích thước|Dimensions)\s*[:=]\s*([^\n\r,]+)/i);
+  // 1. Explicit Size line e.g. "Size: 9,84 inches", "SIZE + STYLE: Sweatshirt | M", "Choose size (inches): 2.36x2.36"
+  const lineMatch = text.match(/(?:Khách đặt Size|Select Size|Choose size|Size(?:\s*[\+/&]\s*(?:Style|Color|Type))?\s*(?:\([^)]*\))?|size|Kích thước|Dimensions)\s*[:=]\s*([^\n\r]+)/i);
   if (lineMatch && lineMatch[1] && lineMatch[1].trim()) {
     let cand = lineMatch[1].trim();
+    // Normalize decimal commas e.g. "9,84 inches" -> "9.84 inches"
+    cand = cand.replace(/(\d+),(\d+)/g, '$1.$2');
+
     if (!cand.toLowerCase().startsWith('1 layer') && !cand.toLowerCase().startsWith('2 layer')) {
       if (/^\d+(\.\d+)?$/.test(cand)) {
         cand = cand + ' in';
@@ -61,10 +64,10 @@ const extractOrderSize = (order) => {
     }
   }
 
-  // 2. Explicit dimension patterns inside customer text e.g. "60" x 50"", "8x8", "10 in", "12in-18in"
-  const dimMatch = text.match(/\b(\d+(?:\.\d+)?\s*["″]?\s*[x×*]\s*\d+(?:\.\d+)?\s*["″]?|\d+(?:\.\d+)?\s*(?:in|inch|inches|cm)\b)/i);
+  // 2. Explicit dimension patterns inside customer text e.g. "60" x 50"", "8x8", "9,84 inches", "10 in", "12in-18in"
+  const dimMatch = text.match(/\b(\d+(?:[\.,]\d+)?\s*["″]?\s*[x×*]\s*\d+(?:[\.,]\d+)?\s*["″]?|\d+(?:[\.,]\d+)?\s*(?:in|inch|inches|cm)\b)/i);
   if (dimMatch && dimMatch[1] && dimMatch[1].trim()) {
-    return dimMatch[1].trim();
+    return dimMatch[1].trim().replace(/(\d+),(\d+)/g, '$1.$2');
   }
 
   // 3. Clothing Size pattern e.g. "Sweatshirt | M", "Hoodie | L"
