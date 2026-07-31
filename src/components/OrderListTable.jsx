@@ -48,8 +48,8 @@ const extractOrderSize = (order) => {
   const text = (order.personalization.text || '').trim();
   if (!text) return '';
 
-  // 1. Explicit Size line e.g. "Size (inches): 8", "Size: 60" x 50"", "Size: 8x8", "Kích thước: 10 in"
-  const lineMatch = text.match(/(?:Khách đặt Size|Select Size|Size\s*(?:\([^)]*\))?|size|Kích thước|Dimensions)\s*[:=]\s*([^\n\r,]+)/i);
+  // 1. Explicit Size line e.g. "SIZE + STYLE: Sweatshirt | M", "Size (inches): 8", "Size: 60" x 50"", "Size: 8x8"
+  const lineMatch = text.match(/(?:Khách đặt Size|Select Size|Size(?:\s*[\+/&]\s*(?:Style|Color|Type))?\s*(?:\([^)]*\))?|size|Kích thước|Dimensions)\s*[:=]\s*([^\n\r,]+)/i);
   if (lineMatch && lineMatch[1] && lineMatch[1].trim()) {
     let cand = lineMatch[1].trim();
     if (!cand.toLowerCase().startsWith('1 layer') && !cand.toLowerCase().startsWith('2 layer')) {
@@ -66,6 +66,12 @@ const extractOrderSize = (order) => {
     return dimMatch[1].trim();
   }
 
+  // 3. Clothing Size pattern e.g. "Sweatshirt | M", "Hoodie | L"
+  const clothMatch = text.match(/\b(Sweatshirt|Hoodie|T-Shirt|Tshirt|Shirt|Sweater)\s*[|\-/:]?\s*([XSMLXL23456789]+)\b/i);
+  if (clothMatch) {
+    return `${clothMatch[1]} | ${clothMatch[2].toUpperCase()}`;
+  }
+
   return '';
 };
 
@@ -79,7 +85,7 @@ const cleanPersonalizationText = (rawText) => {
     if (!trimmed) return false;
     
     // Remove lines that state size e.g. "Size (inches): 8", "Size: 6 in"
-    if (trimmed.match(/^(?:Khách đặt Size|Select Size|Size\s*(?:\([^)]*\))?|size|Kích thước|Dimensions)\s*[:=]/i)) {
+    if (trimmed.match(/^(?:Khách đặt Size|Select Size|Size(?:\s*[\+/&]\s*(?:Style|Color|Type))?\s*(?:\([^)]*\))?|size|Kích thước|Dimensions)\s*[:=]/i)) {
       return false;
     }
     return true;
@@ -92,7 +98,14 @@ const cleanPersonalizationText = (rawText) => {
 export const autoDetectProductGroup = (title = '', sku = '', productGroups = []) => {
   const combined = (String(title || '') + ' ' + String(sku || '')).toLowerCase();
 
-  if (combined.includes('wooden') || combined.includes('wood') || combined.includes('plaque') || combined.includes('stat sign') || combined.includes('sign') || combined.includes('ted01')) {
+  // 1. Check for Shirts, Apparel, Bags, Clothes FIRST!
+  if (combined.includes('shirt') || combined.includes('sweatshirt') || combined.includes('hoodie') || combined.includes('apparel') || combined.includes('clothing') || combined.includes('sweater') || combined.includes('t-shirt') || combined.includes('tshirt') || combined.includes('bag') || combined.includes('tote')) {
+    const foundOther = productGroups.find(g => g && (g.name.includes('Sản phẩm khác') || g.name.includes('Apparel') || g.name.includes('Bags') || g.name.includes('Không Safe Zone')));
+    if (foundOther) return foundOther.name;
+  }
+
+  // 2. Check for Wooden
+  if (combined.includes('wooden') || combined.includes('wood') || combined.includes('plaque') || combined.includes('stat sign') || combined.includes('ted01')) {
     const found = productGroups.find(g => g && g.name.toLowerCase().includes('wooden'));
     if (found) return found.name;
   }
@@ -525,7 +538,18 @@ export default function OrderListTable({
                             </div>
 
                             {/* Matched Safe Zone Size Badge */}
-                            {matchedTmpl && (
+                            {currentGroupName.includes('Không Safe Zone') || currentGroupName.includes('Sản phẩm khác') ? (
+                              <div className="p-2 rounded-lg bg-blue-50 border border-blue-200 text-blue-900 text-[10.5px] space-y-0.5 shadow-2xs">
+                                <div className="flex items-center justify-between font-bold">
+                                  <span className="text-blue-700">ℹ️ Phôi tự do (Áo / Bags):</span>
+                                  <span className="font-extrabold text-blue-900">Không Safe Zone</span>
+                                </div>
+                                <div className="text-[9.5px] text-blue-600 flex items-center justify-between">
+                                  <span>Kích thước:</span>
+                                  <span className="font-bold text-blue-800">Tự do / Freesize</span>
+                                </div>
+                              </div>
+                            ) : matchedTmpl && (
                               <div className="p-2 rounded-lg bg-slate-100 border border-slate-200/90 text-slate-800 text-[10.5px] space-y-0.5 shadow-2xs">
                                 <div className="flex items-center justify-between font-bold">
                                   <span className="text-emerald-700">✅ Khớp Safe Zone:</span>

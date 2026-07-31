@@ -152,6 +152,23 @@ export default function VisualInspectorModal({
               CHỜ UP TẢI
             </span>
           </div>
+        ) : currentGroup.name.includes('Không Safe Zone') || currentGroup.name.includes('Sản phẩm khác') ? (
+          <div className="bg-sky-600 text-white px-5 py-2.5 flex items-center justify-between shadow-md shrink-0">
+            <div className="flex items-center gap-3">
+              <CheckCircle2 className="w-5 h-5 text-white shrink-0" />
+              <div>
+                <h4 className="font-extrabold text-xs uppercase tracking-wide">
+                  ℹ️ ĐÃ NHẬN FILE THIẾT KẾ PHÔI TỰ DO (ÁO / BAGS)
+                </h4>
+                <p className="text-[11px] opacity-95">
+                  Sản phẩm này thuộc dòng Áo/Túi phôi tự do, không bắt buộc Khung Safe Zone cứng. Bạn có thể soi bằng mắt để kiểm tra màu sắc & chi tiết.
+                </p>
+              </div>
+            </div>
+            <span className="px-3 py-1 bg-white text-sky-800 font-extrabold text-xs rounded-lg shadow-sm whitespace-nowrap">
+              FREE-FORM APPAREL
+            </span>
+          </div>
         ) : !ratioResult.isValid ? (
           <div className="bg-rose-600 text-white px-5 py-3 flex items-center justify-between shadow-md shrink-0">
             <div className="flex items-center gap-3">
