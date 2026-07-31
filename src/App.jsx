@@ -159,14 +159,16 @@ export default function App() {
       let finalImageUrl = '';
       let isBizflySuccess = false;
 
+      // Compress image to clean HD JPEG (~100KB) for fast network upload to Bizfly Cloud
+      const compressedForUpload = await compressImageForStorage(localDataUrl, 1200, 0.88);
+
       try {
         setCsvNotifyMsg(`⚡ Đang tải ảnh lên Bizfly Cloud Storage...`);
-        finalImageUrl = await uploadImageToBizfly(localDataUrl, targetOrder.id || targetOrder.orderNumber);
+        finalImageUrl = await uploadImageToBizfly(compressedForUpload, targetOrder.id || targetOrder.orderNumber);
         isBizflySuccess = true;
       } catch (bizflyErr) {
-        console.warn('Bizfly upload hit CORS or network error, applying PostgreSQL direct fallback:', bizflyErr);
-        // Fail-safe fallback: Compress image and save directly to PostgreSQL DB so user is never blocked!
-        finalImageUrl = await compressImageForStorage(localDataUrl, 800, 0.85);
+        console.warn('Bizfly upload error, applying PostgreSQL direct fallback:', bizflyErr);
+        finalImageUrl = compressedForUpload;
       }
 
       const updates = {
