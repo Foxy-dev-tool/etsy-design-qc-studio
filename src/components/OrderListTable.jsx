@@ -713,7 +713,7 @@ export default function OrderListTable({
                       {/* 10. Trạng Thái QC */}
                       {isColVisible('status') && (
                         <td className="p-3 align-top text-center">
-                          {!sizeMatch.isMatched ? (
+                          {!sizeMatch.isMatched && (order.hasUploadedDesign || order.designImage) ? (
                             <span className="px-3 py-1 rounded-full text-xs font-extrabold bg-rose-100 text-rose-800 border border-rose-300 inline-flex items-center gap-1 whitespace-nowrap shadow-2xs" title={`Size "${orderSizeText}" không thuộc nhóm ${currentGroupName}`}>
                               <AlertTriangle className="w-3.5 h-3.5 text-rose-600" />
                               <span>Lỗi QC</span>
