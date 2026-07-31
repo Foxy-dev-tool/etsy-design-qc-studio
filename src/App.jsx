@@ -68,31 +68,14 @@ export default function App() {
   const [csvNotifyMsg, setCsvNotifyMsg] = useState('');
   const [isPostgresConnected, setIsPostgresConnected] = useState(false);
 
-  // Load real-time orders from PostgreSQL IN 1 SINGLE COMPLETE UPDATE (No intermediate screen jumping)
+  // Load real-time orders strictly from PostgreSQL Database (Single Source of Truth)
   const loadLivePostgresOrders = async () => {
     setIsLoadingOrders(true);
     try {
       const dbOrders = await fetchOrdersFromPostgres();
       if (dbOrders && Array.isArray(dbOrders) && dbOrders.length > 0) {
-        // Merge with local fail-safe storage to ensure images stay 100% persistent on reload
-        const mergedOrders = dbOrders.map(ord => {
-          const localSavedImg = localStorage.getItem(`qc_design_img_${ord.id}`);
-          const localSavedMeta = localStorage.getItem(`qc_design_meta_${ord.id}`);
-          let metaObj = {};
-          if (localSavedMeta) {
-            try { metaObj = JSON.parse(localSavedMeta); } catch(e) {}
-          }
-          const designImage = localSavedImg || ord.designImage;
-          const hasUploadedDesign = Boolean(designImage) || ord.hasUploadedDesign;
-          return {
-            ...ord,
-            ...metaObj,
-            designImage,
-            hasUploadedDesign
-          };
-        });
-        setOrders(mergedOrders);
-        setTotalInDbCount(mergedOrders.length);
+        setOrders(dbOrders);
+        setTotalInDbCount(dbOrders.length);
         setIsPostgresConnected(true);
       }
     } catch (err) {
@@ -102,8 +85,15 @@ export default function App() {
     }
   };
 
-  // Initial fetch ONCE on mount (No auto-polling interval to prevent screen jumping)
+  // Initial fetch ONCE on mount (Clean up all legacy localStorage cache)
   useEffect(() => {
+    try {
+      Object.keys(localStorage).forEach(key => {
+        if (key.startsWith('qc_design_')) {
+          localStorage.removeItem(key);
+        }
+      });
+    } catch (e) {}
     loadLivePostgresOrders();
   }, []);
 
@@ -166,22 +156,6 @@ export default function App() {
       const newStatus = ratioCheck.isValid ? 'Thành công' : 'Lỗi';
       const compressedDataUrl = await compressImageForStorage(localDataUrl, 800, 0.85);
 
-      // Save to localStorage as instant fail-safe backup
-      try {
-        localStorage.setItem(`qc_design_img_${targetOrder.id}`, compressedDataUrl);
-        localStorage.setItem(`qc_design_meta_${targetOrder.id}`, JSON.stringify({
-          hasUploadedDesign: true,
-          uploadedDesignFile: imageFile.name,
-          designWidth: dimensions.width,
-          designHeight: dimensions.height,
-          designAspectRatio: dimensions.aspectRatio,
-          ratioStatus: ratioCheck.isValid ? 'MATCH' : 'MISMATCH',
-          status: newStatus
-        }));
-      } catch (e) {
-        console.warn('LocalStorage save warning:', e);
-      }
-
       const updates = {
         productGroup: group.name,
         hasUploadedDesign: true,
@@ -227,11 +201,6 @@ export default function App() {
 
   // DELETE UPLOADED DESIGN IMAGE PIPELINE
   const handleDeleteDesign = (targetOrder) => {
-    try {
-      localStorage.removeItem(`qc_design_img_${targetOrder.id}`);
-      localStorage.removeItem(`qc_design_meta_${targetOrder.id}`);
-    } catch (e) {}
-
     const updates = {
       productGroup: targetOrder.productGroup,
       hasUploadedDesign: false,
