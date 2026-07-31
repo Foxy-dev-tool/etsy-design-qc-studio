@@ -156,14 +156,24 @@ export default function App() {
 
       const newStatus = ratioCheck.isValid ? 'Thành công' : 'Lỗi';
 
-      setCsvNotifyMsg(`⚡ Đang tải ảnh lên Bizfly Cloud Storage...`);
-      const bizflyPublicUrl = await uploadImageToBizfly(localDataUrl, targetOrder.id || targetOrder.orderNumber);
+      let finalImageUrl = '';
+      let isBizflySuccess = false;
+
+      try {
+        setCsvNotifyMsg(`⚡ Đang tải ảnh lên Bizfly Cloud Storage...`);
+        finalImageUrl = await uploadImageToBizfly(localDataUrl, targetOrder.id || targetOrder.orderNumber);
+        isBizflySuccess = true;
+      } catch (bizflyErr) {
+        console.warn('Bizfly upload hit CORS or network error, applying PostgreSQL direct fallback:', bizflyErr);
+        // Fail-safe fallback: Compress image and save directly to PostgreSQL DB so user is never blocked!
+        finalImageUrl = await compressImageForStorage(localDataUrl, 800, 0.85);
+      }
 
       const updates = {
         productGroup: group.name,
         hasUploadedDesign: true,
         uploadedDesignFile: imageFile.name,
-        designImage: bizflyPublicUrl,
+        designImage: finalImageUrl,
         designWidth: dimensions.width,
         designHeight: dimensions.height,
         designAspectRatio: dimensions.aspectRatio,
@@ -189,15 +199,19 @@ export default function App() {
         }));
       }
 
-      setCsvNotifyMsg(`✅ Upload ảnh lên Bizfly Cloud thành công! Kích thước gốc: ${dimensions.width}×${dimensions.height}px.`);
-      setTimeout(() => setCsvNotifyMsg(''), 4000);
+      if (isBizflySuccess) {
+        setCsvNotifyMsg(`✅ Upload ảnh lên Bizfly Cloud thành công! Kích thước gốc: ${dimensions.width}×${dimensions.height}px.`);
+      } else {
+        setCsvNotifyMsg(`⚠️ Bizfly chặn CORS trình duyệt -> Hệ thống đã tự động lưu ảnh an toàn vào PostgreSQL Database! (Vui lòng cấu hình CORS trên Bizfly).`);
+      }
+      setTimeout(() => setCsvNotifyMsg(''), 6000);
 
-      // 2. Sync URL to PostgreSQL Database
+      // 2. Sync URL or Fallback Image to PostgreSQL Database
       updateOrderInPostgres(targetOrder.id, updates);
 
     } catch (err) {
-      console.error('Lỗi khi upload ảnh lên Bizfly Cloud Storage:', err);
-      setCsvNotifyMsg(`❌ Lỗi khi upload ảnh lên Bizfly Cloud: ${err.message || 'Lỗi mạng'}`);
+      console.error('Lỗi khi xử lý ảnh upload:', err);
+      setCsvNotifyMsg(`❌ Lỗi khi đọc ảnh: ${err.message || 'File không hợp lệ'}`);
       setTimeout(() => setCsvNotifyMsg(''), 4000);
     }
   };
