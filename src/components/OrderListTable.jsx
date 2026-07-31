@@ -129,14 +129,19 @@ export const autoDetectProductGroup = (title = '', sku = '', productGroups = [])
   return productGroups[0]?.name || 'Stained Glass Suncatcher';
 };
 
-// Safe Zone template matcher by size text or closest aspect ratio
-export const getMatchedTemplateForGroup = (group, orderSizeText = '') => {
+// Strict Size vs Product Group Compatibility Checker
+export const checkSizeMatchStatus = (group, orderSizeText = '') => {
   if (!group || !Array.isArray(group.templates) || group.templates.length === 0) {
-    return { sizeLabel: 'Standard', widthPx: 3012, heightPx: 3012, templateImage: '/_4123920413.png' };
+    return { isMatched: true, template: null };
   }
 
-  if (!orderSizeText) {
-    return group.templates[0];
+  // If group is No Safe Zone / Free-Form / Apparel / Bags, any size is allowed
+  if (group.name.includes('Không Safe Zone') || group.name.includes('Sản phẩm khác') || group.isFreeForm) {
+    return { isMatched: true, template: group.templates[0], isFreeForm: true };
+  }
+
+  if (!orderSizeText || !orderSizeText.trim()) {
+    return { isMatched: true, template: group.templates[0], isDefault: true };
   }
 
   const searchText = orderSizeText.toLowerCase().replace(',', '.');
@@ -148,37 +153,48 @@ export const getMatchedTemplateForGroup = (group, orderSizeText = '') => {
     const searchNums = searchText.match(/\d+(?:\.\d+)?/g) || [];
 
     if (searchText.includes(tmplSize)) {
-      return tmpl;
+      return { isMatched: true, template: tmpl };
     }
 
     if (tmplNums.length > 0 && searchNums.length > 0 && tmplNums.every(n => searchNums.includes(n))) {
-      return tmpl;
+      return { isMatched: true, template: tmpl };
     }
   }
 
   // Group specific matching
   if (group.name === 'Stained Glass Suncatcher') {
-    if (searchText.includes('9.84')) return group.templates[3];
-    if (searchText.includes('7.87')) return group.templates[2];
-    if (searchText.includes('5.9')) return group.templates[1];
-    if (searchText.includes('3.94')) return group.templates[0];
+    if (searchText.includes('9.84')) return { isMatched: true, template: group.templates[3] };
+    if (searchText.includes('7.87')) return { isMatched: true, template: group.templates[2] };
+    if (searchText.includes('5.9')) return { isMatched: true, template: group.templates[1] };
+    if (searchText.includes('3.94')) return { isMatched: true, template: group.templates[0] };
   } else if (group.name === 'Arylic Suncatcher') {
-    if (searchText.includes('12')) return group.templates[1];
-    if (searchText.includes('3.54')) return group.templates[0];
+    if (searchText.includes('12')) return { isMatched: true, template: group.templates[1] };
+    if (searchText.includes('3.54')) return { isMatched: true, template: group.templates[0] };
   } else if (group.name === 'Graduation Cap') {
-    if (searchText.includes('9.5')) return group.templates[1];
-    if (searchText.includes('7.5')) return group.templates[0];
+    if (searchText.includes('9.5')) return { isMatched: true, template: group.templates[1] };
+    if (searchText.includes('7.5')) return { isMatched: true, template: group.templates[0] };
   } else if (group.name === 'Desk Mat') {
-    if (searchText.includes('90x40') || searchText.includes('90*40')) return group.templates[6];
-    if (searchText.includes('80x30') || searchText.includes('80*30')) return group.templates[5];
-    if (searchText.includes('70x35') || searchText.includes('70*35')) return group.templates[4];
-    if (searchText.includes('60x30') || searchText.includes('60*30')) return group.templates[3];
-    if (searchText.includes('45x40') || searchText.includes('45*40')) return group.templates[2];
-    if (searchText.includes('30x25') || searchText.includes('30*25')) return group.templates[1];
-    if (searchText.includes('18x22') || searchText.includes('18*22')) return group.templates[0];
+    if (searchText.includes('90x40') || searchText.includes('90*40')) return { isMatched: true, template: group.templates[6] };
+    if (searchText.includes('80x30') || searchText.includes('80*30')) return { isMatched: true, template: group.templates[5] };
+    if (searchText.includes('70x35') || searchText.includes('70*35')) return { isMatched: true, template: group.templates[4] };
+    if (searchText.includes('60x30') || searchText.includes('60*30')) return { isMatched: true, template: group.templates[3] };
+    if (searchText.includes('45x40') || searchText.includes('45*40')) return { isMatched: true, template: group.templates[2] };
+    if (searchText.includes('30x25') || searchText.includes('30*25')) return { isMatched: true, template: group.templates[1] };
+    if (searchText.includes('18x22') || searchText.includes('18*22')) return { isMatched: true, template: group.templates[0] };
   }
 
-  return group.templates[0];
+  // IF NO TEMPLATE MATCHED (e.g. orderSizeText is "Sweatshirt | M" but group is "Stained Glass Suncatcher")
+  return {
+    isMatched: false,
+    template: group.templates[0],
+    errorReason: `Kích thước "${orderSizeText}" không thuộc nhóm "${group.name}".`
+  };
+};
+
+// Safe Zone template matcher by size text or closest aspect ratio
+export const getMatchedTemplateForGroup = (group, orderSizeText = '') => {
+  const result = checkSizeMatchStatus(group, orderSizeText);
+  return result.template || (group && group.templates ? group.templates[0] : null);
 };
 
 export default function OrderListTable({
@@ -538,7 +554,19 @@ export default function OrderListTable({
                             </div>
 
                             {/* Matched Safe Zone Size Badge */}
-                            {currentGroupName.includes('Không Safe Zone') || currentGroupName.includes('Sản phẩm khác') ? (
+                            {!sizeMatch.isMatched ? (
+                              <div className="p-2 rounded-lg bg-rose-50 border border-rose-300 text-rose-800 text-[10.5px] space-y-0.5 shadow-2xs">
+                                <div className="flex items-center justify-between font-extrabold text-rose-700">
+                                  <span>⚠️ SAI NHÓM SP / KHÔNG CÓ SIZE:</span>
+                                </div>
+                                <div className="text-[9.5px] text-rose-700 font-bold leading-tight pt-0.5">
+                                  Size "{orderSizeText}" không thuộc các mẫu Safe Zone của nhóm {currentGroupName}.
+                                </div>
+                                <div className="text-[9.5px] text-rose-600 font-medium pt-0.5">
+                                  👉 Vui lòng chọn lại Nhóm "Sản phẩm khác (Bags, Apparel)".
+                                </div>
+                              </div>
+                            ) : currentGroupName.includes('Không Safe Zone') || currentGroupName.includes('Sản phẩm khác') ? (
                               <div className="p-2 rounded-lg bg-blue-50 border border-blue-200 text-blue-900 text-[10.5px] space-y-0.5 shadow-2xs">
                                 <div className="flex items-center justify-between font-bold">
                                   <span className="text-blue-700">ℹ️ Phôi tự do (Áo / Bags):</span>
@@ -682,7 +710,12 @@ export default function OrderListTable({
                       {/* 10. Trạng Thái QC */}
                       {isColVisible('status') && (
                         <td className="p-3 align-top text-center">
-                          {order.status === 'Thành công' || order.status === 'Hoàn thành' ? (
+                          {!sizeMatch.isMatched ? (
+                            <span className="px-3 py-1 rounded-full text-xs font-extrabold bg-rose-100 text-rose-800 border border-rose-300 inline-flex items-center gap-1 whitespace-nowrap shadow-2xs" title={`Size "${orderSizeText}" không thuộc nhóm ${currentGroupName}`}>
+                              <AlertTriangle className="w-3.5 h-3.5 text-rose-600" />
+                              <span>Lỗi QC</span>
+                            </span>
+                          ) : order.status === 'Thành công' || order.status === 'Hoàn thành' ? (
                             <span className="px-3 py-1 rounded-full text-xs font-extrabold bg-emerald-100 text-emerald-800 border border-emerald-300 inline-flex items-center gap-1 whitespace-nowrap shadow-2xs">
                               <CheckCircle2 className="w-3.5 h-3.5 text-emerald-600" />
                               <span>Thành công</span>

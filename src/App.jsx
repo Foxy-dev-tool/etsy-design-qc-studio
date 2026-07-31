@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import Header from './components/Header';
-import OrderListTable, { autoDetectProductGroup, getMatchedTemplateForGroup } from './components/OrderListTable';
+import OrderListTable, { autoDetectProductGroup, getMatchedTemplateForGroup, checkSizeMatchStatus } from './components/OrderListTable';
 import VisualInspectorModal from './components/VisualInspectorModal';
 import ProductGroupConfig from './components/ProductGroupConfig';
 import AIScannerModal from './components/AIScannerModal';
@@ -143,7 +143,8 @@ export default function App() {
 
       const group = productGroups.find(g => g.name === targetOrder.productGroup) || productGroups[0];
       const orderSizeText = targetOrder.personalization?.size || targetOrder.targetSizeLabel || targetOrder.personalizationRaw || '';
-      const matchedTmpl = getMatchedTemplateForGroup(group, orderSizeText);
+      const sizeMatch = checkSizeMatchStatus(group, orderSizeText);
+      const matchedTmpl = sizeMatch.template || getMatchedTemplateForGroup(group, orderSizeText);
 
       const ratioCheck = validateAspectRatio(
         dimensions.width,
@@ -152,6 +153,11 @@ export default function App() {
         matchedTmpl.heightPx,
         group.tolerancePercent
       );
+
+      if (!sizeMatch.isMatched) {
+        ratioCheck.isValid = false;
+        ratioCheck.message = sizeMatch.errorReason;
+      }
 
       const newStatus = ratioCheck.isValid ? 'Thành công' : 'Lỗi';
 
@@ -274,6 +280,9 @@ export default function App() {
       const imgUrl = targetOrder.designImage || targetOrder.mockupThumb;
       const dimensions = await getImageDimensions(imgUrl);
 
+      const orderSizeText = targetOrder.personalization?.size || targetOrder.targetSizeLabel || targetOrder.personalizationRaw || '';
+      const sizeMatch = checkSizeMatchStatus(groupObj, orderSizeText);
+
       const ratioCheck = validateAspectRatio(
         dimensions.width,
         dimensions.height,
@@ -281,6 +290,11 @@ export default function App() {
         matchedTmpl ? matchedTmpl.heightPx : 3012,
         groupObj ? groupObj.tolerancePercent : 1.5
       );
+
+      if (!sizeMatch.isMatched) {
+        ratioCheck.isValid = false;
+        ratioCheck.message = sizeMatch.errorReason;
+      }
 
       const newStatus = ratioCheck.isValid ? 'Thành công' : 'Lỗi';
 
