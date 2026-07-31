@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import Header from './components/Header';
-import OrderListTable, { autoDetectProductGroup } from './components/OrderListTable';
+import OrderListTable, { autoDetectProductGroup, getMatchedTemplateForGroup } from './components/OrderListTable';
 import VisualInspectorModal from './components/VisualInspectorModal';
 import ProductGroupConfig from './components/ProductGroupConfig';
 import AIScannerModal from './components/AIScannerModal';
@@ -142,9 +142,8 @@ export default function App() {
       const dimensions = await getImageDimensions(localDataUrl);
 
       const group = productGroups.find(g => g.name === targetOrder.productGroup) || productGroups[0];
-      const matchedTmpl = group.templates.find(
-        t => t.sizeLabel.toLowerCase().replace(',', '.') === (targetOrder.personalization?.size || targetOrder.targetSizeLabel || '').toLowerCase().replace(',', '.')
-      ) || group.templates[group.templates.length - 1];
+      const orderSizeText = targetOrder.personalization?.size || targetOrder.targetSizeLabel || targetOrder.personalizationRaw || '';
+      const matchedTmpl = getMatchedTemplateForGroup(group, orderSizeText);
 
       const ratioCheck = validateAspectRatio(
         dimensions.width,

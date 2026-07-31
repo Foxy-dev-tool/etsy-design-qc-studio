@@ -117,7 +117,7 @@ export const autoDetectProductGroup = (title = '', sku = '', productGroups = [])
 };
 
 // Safe Zone template matcher by size text or closest aspect ratio
-const getMatchedTemplateForGroup = (group, orderSizeText = '') => {
+export const getMatchedTemplateForGroup = (group, orderSizeText = '') => {
   if (!group || !Array.isArray(group.templates) || group.templates.length === 0) {
     return { sizeLabel: 'Standard', widthPx: 3012, heightPx: 3012, templateImage: '/_4123920413.png' };
   }
