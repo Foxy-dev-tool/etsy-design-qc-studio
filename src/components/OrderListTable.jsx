@@ -202,6 +202,58 @@ export const getMatchedTemplateForGroup = (group, orderSizeText = '') => {
   return result.template || (group && group.templates ? group.templates[0] : null);
 };
 
+// Unified Single Source of Truth QC Evaluator
+export const getOrderQCStatus = (order, productGroups = []) => {
+  if (!order) return { status: 'Chờ kiểm tra', ratioStatus: 'NEEDS_CHECK', isMatched: false, hasImage: false };
+
+  const hasImage = Boolean(order.hasUploadedDesign || order.designImage);
+  if (!hasImage) {
+    return { status: 'Chờ kiểm tra', ratioStatus: 'NEEDS_CHECK', isMatched: false, hasImage: false };
+  }
+
+  const detectedSize = extractOrderSize(order);
+  const orderSizeText = detectedSize || (typeof order.personalization === 'object' ? order.personalization?.size : '') || order.targetSizeLabel || '';
+
+  const currentGroupName = order.productGroup || autoDetectProductGroup(order.productTitle, order.sku, productGroups);
+  const currentGroupObj = productGroups.find(g => g && g.name === currentGroupName) || productGroups[0];
+  const sizeMatch = checkSizeMatchStatus(currentGroupObj, orderSizeText);
+  const matchedTmpl = sizeMatch.template || getMatchedTemplateForGroup(currentGroupObj, orderSizeText);
+
+  if (order.designWidth > 0 && order.designHeight > 0 && matchedTmpl) {
+    const ratioCheck = validateAspectRatio(
+      order.designWidth,
+      order.designHeight,
+      matchedTmpl.widthPx,
+      matchedTmpl.heightPx,
+      currentGroupObj ? currentGroupObj.tolerancePercent : 1.5
+    );
+
+    const isValid = sizeMatch.isMatched && ratioCheck.isValid;
+    return {
+      status: isValid ? 'Thành công' : 'Lỗi',
+      ratioStatus: isValid ? 'MATCH' : 'MISMATCH',
+      isMatched: isValid,
+      hasImage: true,
+      sizeMatch,
+      matchedTmpl,
+      currentGroupObj,
+      orderSizeText
+    };
+  }
+
+  const isValid = order.status === 'Thành công' || order.status === 'Hoàn thành';
+  return {
+    status: isValid ? 'Thành công' : (order.status === 'Lỗi' ? 'Lỗi' : 'Chờ kiểm tra'),
+    ratioStatus: isValid ? 'MATCH' : (order.ratioStatus === 'MISMATCH' ? 'MISMATCH' : 'NEEDS_CHECK'),
+    isMatched: isValid,
+    hasImage: true,
+    sizeMatch,
+    matchedTmpl,
+    currentGroupObj,
+    orderSizeText
+  };
+};
+
 export default function OrderListTable({
   orders = [],
   productGroups = [],
@@ -228,6 +280,8 @@ export default function OrderListTable({
 
   // Filter logic across all orders
   const filteredOrders = orders.filter(order => {
+    const qc = getOrderQCStatus(order, productGroups);
+
     const matchesSearch = 
       order.orderNumber.toLowerCase().includes(searchQuery.toLowerCase()) ||
       order.productTitle.toLowerCase().includes(searchQuery.toLowerCase()) ||
@@ -235,8 +289,16 @@ export default function OrderListTable({
       (order.personalization?.text || '').toLowerCase().includes(searchQuery.toLowerCase()) ||
       (order.note || '').toLowerCase().includes(searchQuery.toLowerCase());
 
-    const matchesRatio = filterRatio === 'ALL' || order.ratioStatus === filterRatio;
-    const matchesStatus = filterStatus === 'ALL' || order.status === filterStatus;
+    const matchesRatio = filterRatio === 'ALL' 
+      || (filterRatio === 'MATCH' && qc.ratioStatus === 'MATCH')
+      || (filterRatio === 'MISMATCH' && qc.ratioStatus === 'MISMATCH')
+      || (filterRatio === 'NEEDS_CHECK' && !qc.hasImage);
+
+    const matchesStatus = filterStatus === 'ALL'
+      || (filterStatus === 'Thành công' && qc.status === 'Thành công')
+      || (filterStatus === 'Hoàn thành' && qc.status === 'Thành công')
+      || (filterStatus === 'Lỗi' && qc.status === 'Lỗi')
+      || (filterStatus === 'Chờ kiểm tra' && qc.status === 'Chờ kiểm tra');
 
     return matchesSearch && matchesRatio && matchesStatus;
   });

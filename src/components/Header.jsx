@@ -12,10 +12,13 @@ import {
   Database
 } from 'lucide-react';
 
+import { getOrderQCStatus } from './OrderListTable';
+
 export default function Header({
   activeTab,
   setActiveTab,
   orders = [],
+  productGroups = [],
   onSyncEtsy,
   isSyncing,
   onRunToolScript,
@@ -23,9 +26,20 @@ export default function Header({
   onSeedSupabase
 }) {
   const totalOrders = orders.length;
-  const successOrders = orders.filter(o => o.status === 'Thành công' || o.status === 'Hoàn thành').length;
-  const errorOrders = orders.filter(o => o.status === 'Lỗi' || o.status === 'Sai chữ AI' || o.ratioStatus === 'MISMATCH').length;
-  const pendingOrders = orders.filter(o => o.status === 'Chờ kiểm tra' || (!o.hasUploadedDesign && o.status !== 'Thành công' && o.status !== 'Lỗi')).length;
+  let successOrders = 0;
+  let errorOrders = 0;
+  let pendingOrders = 0;
+
+  for (const o of orders) {
+    const qc = getOrderQCStatus(o, productGroups);
+    if (!qc.hasImage || qc.status === 'Chờ kiểm tra') {
+      pendingOrders++;
+    } else if (qc.status === 'Thành công') {
+      successOrders++;
+    } else {
+      errorOrders++;
+    }
+  }
 
   return (
     <header className="sticky top-0 z-40 bg-slate-900 text-white border-b border-slate-800 shadow-xl backdrop-blur-md bg-opacity-95">

@@ -406,6 +406,7 @@ export default function App() {
         activeTab={activeTab}
         setActiveTab={setActiveTab}
         orders={orders}
+        productGroups={productGroups}
         onSyncEtsy={handleSyncEtsy}
         isSyncing={isSyncingEtsy}
         onRunToolScript={handleRunToolScript}
