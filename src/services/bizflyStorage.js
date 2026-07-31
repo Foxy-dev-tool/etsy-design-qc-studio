@@ -12,7 +12,6 @@ const BIZFLY_CONFIG = {
   }
 };
 
-// Client 1: Virtual-Hosted Style (https://bucket-dakuho.hn.ss.bfcplatform.vn/...)
 const s3ClientVirtual = new S3Client({
   region: BIZFLY_CONFIG.region,
   endpoint: BIZFLY_CONFIG.endpoint,
@@ -20,18 +19,9 @@ const s3ClientVirtual = new S3Client({
   forcePathStyle: false
 });
 
-// Client 2: Path Style (https://hn.ss.bfcplatform.vn/bucket-dakuho/...)
 const s3ClientPathStyle = new S3Client({
   region: BIZFLY_CONFIG.region,
   endpoint: BIZFLY_CONFIG.endpoint,
-  credentials: BIZFLY_CONFIG.credentials,
-  forcePathStyle: true
-});
-
-// Client 3: Direct Bucket Domain Client
-const s3ClientDirectBucket = new S3Client({
-  region: BIZFLY_CONFIG.region,
-  endpoint: BIZFLY_CONFIG.bucketEndpoint,
   credentials: BIZFLY_CONFIG.credentials,
   forcePathStyle: true
 });
@@ -50,9 +40,35 @@ const dataURLToUint8Array = (dataURL) => {
 };
 
 /**
- * Upload Image to Bizfly Cloud Storage Bucket with Multi-Strategy & Auto-Retry
+ * Upload Image to Bizfly Cloud Storage Bucket with API Gateway Proxy + S3 Fallback
  */
 export const uploadImageToBizfly = async (imageInput, orderId) => {
+  // Strategy 1: Serverless API Gateway Upload (/api/upload-bizfly)
+  // This bypasses browser CORS restrictions 100% by doing Server-to-Server S3 upload!
+  try {
+    const response = await fetch('/api/upload-bizfly', {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json'
+      },
+      body: JSON.stringify({
+        imageBase64: typeof imageInput === 'string' ? imageInput : '',
+        orderId
+      })
+    });
+
+    if (response.ok) {
+      const data = await response.json();
+      if (data && data.publicUrl) {
+        console.log('✅ Upload thành công lên Bizfly Cloud Storage (via Serverless API):', data.publicUrl);
+        return data.publicUrl;
+      }
+    }
+  } catch (apiErr) {
+    console.warn('⚠️ Serverless API upload unreachable, falling back to direct S3 client:', apiErr.message);
+  }
+
+  // Strategy 2: Direct Client-Side S3 SDK Fallback
   let bodyBytes;
   let contentType = 'image/jpeg';
   let fileExtension = 'jpg';
@@ -83,32 +99,17 @@ export const uploadImageToBizfly = async (imageInput, orderId) => {
     ACL: 'public-read'
   });
 
-  const clients = [
-    { client: s3ClientVirtual, name: 'Virtual-Hosted' },
-    { client: s3ClientPathStyle, name: 'Path-Style' },
-    { client: s3ClientDirectBucket, name: 'Direct-Bucket' }
-  ];
-
-  let lastError = null;
-
-  for (const { client, name } of clients) {
+  try {
+    await s3ClientPathStyle.send(command);
+    return `${BIZFLY_CONFIG.bucketEndpoint}/${objectKey}`;
+  } catch (e1) {
     try {
-      await client.send(command);
-      const publicUrl = `${BIZFLY_CONFIG.bucketEndpoint}/${objectKey}`;
-      console.log(`✅ Upload thành công lên Bizfly Storage (${name}):`, publicUrl);
-      return publicUrl;
-    } catch (err) {
-      console.warn(`⚠️ Thử upload phương thức ${name} thất bại:`, err.message);
-      lastError = err;
+      await s3ClientVirtual.send(command);
+      return `${BIZFLY_CONFIG.bucketEndpoint}/${objectKey}`;
+    } catch (e2) {
+      throw new Error('Bizfly Cloud từ chối kết nối trực tiếp từ trình duyệt. Vui lòng thử lại.');
     }
   }
-
-  // If all S3 client strategies hit browser CORS "Failed to fetch"
-  if (lastError && (lastError.message.includes('Failed to fetch') || lastError.name === 'TypeError')) {
-    throw new Error('Bizfly Cloud chặn CORS từ trình duyệt. Vui lòng bật CORS [AllowedOrigins: *] trong Bảng quản trị Bizfly Storage.');
-  }
-
-  throw lastError || new Error('Không thể tải ảnh lên Bizfly Cloud Storage.');
 };
 
 /**
@@ -126,7 +127,7 @@ export const deleteImageFromBizfly = async (publicUrl) => {
       Key: objectKey
     });
 
-    await s3ClientVirtual.send(command).catch(() => s3ClientPathStyle.send(command));
+    await s3ClientPathStyle.send(command).catch(() => s3ClientVirtual.send(command));
     console.log('🗑️ Đã xóa ảnh trên Bizfly Storage:', objectKey);
     return true;
   } catch (err) {
