@@ -19,6 +19,7 @@ import {
   Trash2
 } from 'lucide-react';
 import { DEFAULT_COLUMNS } from '../services/mockData';
+import { validateAspectRatio } from '../services/imageAnalyzer';
 
 // Frontend helper to parse JSON array notes
 const formatNoteDisplay = (rawNote) => {
@@ -418,6 +419,22 @@ export default function OrderListTable({
                   const sizeMatch = checkSizeMatchStatus(currentGroupObj, orderSizeText);
                   const matchedTmpl = sizeMatch.template || getMatchedTemplateForGroup(currentGroupObj, orderSizeText);
 
+                  // Real-time aspect ratio & size validation
+                  const hasImage = Boolean(order.hasUploadedDesign || order.designImage);
+                  const dynamicRatioCheck = hasImage && order.designWidth > 0 && order.designHeight > 0 && matchedTmpl
+                    ? validateAspectRatio(
+                        order.designWidth,
+                        order.designHeight,
+                        matchedTmpl.widthPx,
+                        matchedTmpl.heightPx,
+                        currentGroupObj ? currentGroupObj.tolerancePercent : 1.5
+                      )
+                    : null;
+
+                  const isRealtimeValid = dynamicRatioCheck
+                    ? (sizeMatch.isMatched && dynamicRatioCheck.isValid)
+                    : null;
+
                   return (
                     <tr 
                       key={order.id}
@@ -716,24 +733,19 @@ export default function OrderListTable({
                       {/* 10. Trạng Thái QC */}
                       {isColVisible('status') && (
                         <td className="p-3 align-top text-center">
-                          {!sizeMatch.isMatched && (order.hasUploadedDesign || order.designImage) ? (
-                            <span className="px-3 py-1 rounded-full text-xs font-extrabold bg-rose-100 text-rose-800 border border-rose-300 inline-flex items-center gap-1 whitespace-nowrap shadow-2xs" title={`Size "${orderSizeText}" không thuộc nhóm ${currentGroupName}`}>
-                              <AlertTriangle className="w-3.5 h-3.5 text-rose-600" />
-                              <span>Lỗi QC</span>
+                          {!hasImage ? (
+                            <span className="px-2.5 py-1 rounded-full text-xs font-bold bg-amber-50 text-amber-800 border border-amber-200 inline-block whitespace-nowrap">
+                              Chờ kiểm tra
                             </span>
-                          ) : order.status === 'Thành công' || order.status === 'Hoàn thành' ? (
+                          ) : isRealtimeValid === true ? (
                             <span className="px-3 py-1 rounded-full text-xs font-extrabold bg-emerald-100 text-emerald-800 border border-emerald-300 inline-flex items-center gap-1 whitespace-nowrap shadow-2xs">
                               <CheckCircle2 className="w-3.5 h-3.5 text-emerald-600" />
                               <span>Thành công</span>
                             </span>
-                          ) : order.status === 'Lỗi' || order.status === 'Sai chữ AI' || order.ratioStatus === 'MISMATCH' ? (
-                            <span className="px-3 py-1 rounded-full text-xs font-extrabold bg-rose-100 text-rose-800 border border-rose-300 inline-flex items-center gap-1 whitespace-nowrap shadow-2xs">
+                          ) : (
+                            <span className="px-3 py-1 rounded-full text-xs font-extrabold bg-rose-100 text-rose-800 border border-rose-300 inline-flex items-center gap-1 whitespace-nowrap shadow-2xs" title={`Lỗi QC: Tỷ lệ hoặc Kích thước không khớp Safe Zone`}>
                               <AlertTriangle className="w-3.5 h-3.5 text-rose-600" />
                               <span>Lỗi QC</span>
-                            </span>
-                          ) : (
-                            <span className="px-2.5 py-1 rounded-full text-xs font-bold bg-amber-50 text-amber-800 border border-amber-200 inline-block whitespace-nowrap">
-                              Chờ kiểm tra
                             </span>
                           )}
                         </td>
