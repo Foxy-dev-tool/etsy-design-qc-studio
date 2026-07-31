@@ -42,7 +42,7 @@ const formatNoteDisplay = (rawNote) => {
 };
 
 // Extract size string strictly from customer personalization text ONLY (No DB size property, title, or note)
-const extractOrderSize = (order) => {
+export const extractOrderSize = (order) => {
   if (!order) return '';
   const text = typeof order.personalization === 'string'
     ? order.personalization

@@ -14,6 +14,7 @@ import {
   Image as ImageIcon
 } from 'lucide-react';
 import { validateAspectRatio } from '../services/imageAnalyzer';
+import { getMatchedTemplateForGroup, checkSizeMatchStatus, extractOrderSize } from './OrderListTable';
 
 export default function VisualInspectorModal({
   order,
@@ -26,40 +27,15 @@ export default function VisualInspectorModal({
 
   const currentGroup = productGroup || { templates: [] };
   
-  // Safe Zone template matcher (by size label or closest aspect ratio)
-  const matchedTemplate = (() => {
-    if (!currentGroup.templates || currentGroup.templates.length === 0) {
-      return {
-        sizeLabel: 'Safe Zone Standard',
-        widthPx: 3012,
-        heightPx: 3012,
-        aspectRatio: 1.0,
-        templateImage: currentGroup.baseMockup || '/_4123920413.png'
-      };
-    }
-    const orderSize = (order.personalization?.size || order.targetSizeLabel || '').toLowerCase().replace(',', '.');
-    if (orderSize) {
-      const match = currentGroup.templates.find(
-        t => t.sizeLabel && t.sizeLabel.toLowerCase().replace(',', '.').includes(orderSize)
-      );
-      if (match) return match;
-    }
-    if (order.designWidth > 0 && order.designHeight > 0) {
-      const actualRatio = order.designWidth / order.designHeight;
-      let best = currentGroup.templates[0];
-      let minDiff = Infinity;
-      for (const tmpl of currentGroup.templates) {
-        const tmplRatio = (tmpl.widthPx || 1) / (tmpl.heightPx || 1);
-        const diff = Math.abs(actualRatio - tmplRatio);
-        if (diff < minDiff) {
-          minDiff = diff;
-          best = tmpl;
-        }
-      }
-      return best;
-    }
-    return currentGroup.templates[0];
-  })();
+  const orderSizeText = extractOrderSize(order) || (typeof order.personalization === 'object' ? order.personalization?.size : '') || order.targetSizeLabel || '';
+  const sizeMatch = checkSizeMatchStatus(currentGroup, orderSizeText);
+  const matchedTemplate = sizeMatch.template || getMatchedTemplateForGroup(currentGroup, orderSizeText) || {
+    sizeLabel: 'Safe Zone Standard',
+    widthPx: 3012,
+    heightPx: 3012,
+    aspectRatio: 1.0,
+    templateImage: currentGroup.baseMockup || '/_4123920413.png'
+  };
 
   const templateImgSrc = matchedTemplate.templateImage || matchedTemplate.tmplFile || currentGroup.baseMockup || '/_4123920413.png';
 
@@ -88,6 +64,11 @@ export default function VisualInspectorModal({
     targetH,
     currentGroup.tolerancePercent || 1.5
   );
+
+  if (!sizeMatch.isMatched) {
+    ratioResult.isValid = false;
+    ratioResult.message = sizeMatch.errorReason;
+  }
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/70 backdrop-blur-md p-2 sm:p-4 overflow-y-auto font-sans">
