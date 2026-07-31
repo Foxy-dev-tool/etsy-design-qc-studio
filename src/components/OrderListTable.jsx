@@ -43,10 +43,11 @@ const formatNoteDisplay = (rawNote) => {
 
 // Extract size string strictly from customer personalization text ONLY (No DB size property, title, or note)
 const extractOrderSize = (order) => {
-  if (!order || !order.personalization) return '';
-
-  const text = (order.personalization.text || '').trim();
-  if (!text) return '';
+  if (!order) return '';
+  const text = typeof order.personalization === 'string'
+    ? order.personalization
+    : (order.personalization?.text || order.personalizationRaw || '');
+  if (!text || typeof text !== 'string') return '';
 
   // 1. Explicit Size line e.g. "SIZE + STYLE: Sweatshirt | M", "Size (inches): 8", "Size: 60" x 50"", "Size: 8x8"
   const lineMatch = text.match(/(?:Khách đặt Size|Select Size|Size(?:\s*[\+/&]\s*(?:Style|Color|Type))?\s*(?:\([^)]*\))?|size|Kích thước|Dimensions)\s*[:=]\s*([^\n\r,]+)/i);
@@ -400,17 +401,19 @@ export default function OrderListTable({
                   if (!order) return null;
 
                   const isSelected = selectedOrders.includes(order.id);
-                  const rawText = order.personalization?.text || '';
+                  const rawText = typeof order.personalization === 'string'
+                    ? order.personalization
+                    : (order.personalization?.text || order.personalizationRaw || '');
                   const detectedSize = extractOrderSize(order);
                   const cleanNote = formatNoteDisplay(order.note);
+
+                  const orderSizeText = detectedSize || (typeof order.personalization === 'object' ? order.personalization?.size : '') || order.targetSizeLabel || '';
 
                   // Fail-proof group & template retrieval
                   const currentGroupName = order.productGroup || autoDetectProductGroup(order.productTitle, order.sku, productGroups);
                   const currentGroupObj = productGroups.find(g => g && g.name === currentGroupName) || productGroups[0];
-                  const matchedTmpl = getMatchedTemplateForGroup(
-                    currentGroupObj, 
-                    detectedSize || order.personalization?.size || ''
-                  );
+                  const sizeMatch = checkSizeMatchStatus(currentGroupObj, orderSizeText);
+                  const matchedTmpl = sizeMatch.template || getMatchedTemplateForGroup(currentGroupObj, orderSizeText);
 
                   return (
                     <tr 
